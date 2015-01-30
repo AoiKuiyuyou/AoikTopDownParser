@@ -1,0 +1,202 @@
+all:
+    (
+    `_ctx.args = None`
+    args_def
+    `_ctx.args = args_def.res`)?
+    rule_seq
+    `_ctx.rule_def_s = rule_seq.res`
+    '$'
+
+args_def:
+    args_sign
+    args_group
+    `_ctx.res = self._opts_get(args_group)`
+
+args_sign:
+    r'@'
+
+args_group:
+    brkt_beg (brkt_end | arg_item)
+
+brkt_beg:
+    r'[(]'
+
+brkt_end:
+    r'[)]'
+
+arg_item:
+    arg_expr
+    ```
+_ctx.res = arg_expr.res
+_ctx.par.arg_item = _ctx
+    ```
+    (brkt_end | arg_sep (brkt_end | arg_item))
+
+arg_expr:
+    arg_key
+    arg_kvsep
+    arg_val
+    `_ctx.res = (arg_key.res, arg_val.res)`
+
+arg_key:
+    r'[a-zA-Z_][a-zA-Z0-9_]*'
+    `_ctx.res = arg_key.rem.group()`
+
+arg_kvsep:
+    r'[=]'
+
+arg_val:
+    lit_val
+    `_ctx.res = lit_val.res`
+
+lit_val:
+    lit_str `_ctx.res = lit_str.res`
+    | lit_num `_ctx.res = lit_num.res`
+    | lit_bool `_ctx.res = lit_bool.res`
+    | lit_none `_ctx.res = lit_none.res`
+
+lit_str:
+    'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
+    `_ctx.res = eval(lit_str.rem.group())`
+
+lit_num:
+    r"""
+([-+])?         # sign
+(?=\d|[.]\d)    # next is an integer part or a fraction part
+(\d*)           # integer part
+([.]\d*)?       # fraction part
+(e[-+]?\d+)?    # exponent part
+""" @(flags='re.VERBOSE | re.IGNORECASE')
+    `_ctx.res = eval(lit_num.rem.group())`
+
+lit_bool:
+    r'(True|False)(?![a-zA-Z0-9_])'
+    `_ctx.res = True if (lit_bool.rem.group() == 'True') else False`
+
+lit_none:
+    r'None(?![a-zA-Z0-9_])'
+    `_ctx.res = None`
+
+arg_sep:
+    r'[,]'
+
+rule_seq:
+    `_ctx.res = []`
+    (rule_def
+    `_ctx.res.append(rule_def.res)`
+    )+
+
+rule_def:
+    rule_name
+    rule_colon
+    `args = None`
+    (args_def
+    `args = args_def.res`
+    )?
+    rexpr_or
+    `_ctx.res = RuleDef(name=rule_name.res, expr=rexpr_or.res, args=args)`
+
+rule_name:
+    r'[a-zA-Z_][a-zA-Z0-9_]*'
+    `_ctx.res = rule_name.rem.group()`
+
+rule_colon:
+    r'[:]'
+
+rexpr_or:
+    rexpr_seq
+    `item_s = [rexpr_seq.res]`
+    (rexpr_op
+    rexpr_seq
+    `item_s.append(rexpr_seq.res)`
+    )*
+    `_ctx.res = ExprOr(item_s) if len(item_s) > 1 else item_s[0]`
+
+rexpr_op:
+    r'[|]'
+
+rexpr_seq:
+    `item_s = []`
+    (
+        (code `item_s.append(code.res)`)*
+        rexpr_occ `item_s.append(rexpr_occ.res)`
+        (code `item_s.append(code.res)`)*
+    ) +
+    `_ctx.res = ExprSeq(item_s) if len(item_s) > 1 else item_s[0]`
+
+code:
+    r'(`+)((?:.|\n)*?)\1'
+    `_ctx.res = Code(code.rem.group(2))`
+
+rexpr_occ:
+    rexpr_btm
+    `occ_type = None`
+    ( rexpr_occ01 `occ_type = '01'`
+    | rexpr_occ0m `occ_type = '0m'`
+    | rexpr_occ1m `occ_type = '1m'`
+    )?
+    ```
+if occ_type is None:
+    _ctx.res = rexpr_btm.res
+elif occ_type == '01':
+    _ctx.res = ExprOcc01(rexpr_btm.res)
+elif occ_type == '0m':
+    _ctx.res = ExprOcc0m(rexpr_btm.res)
+elif occ_type == '1m':
+    _ctx.res = ExprOcc1m(rexpr_btm.res)
+else:
+    assert 0
+    ```
+
+rexpr_occ01:
+    r'[?]'
+
+rexpr_occ0m:
+    r'[*]'
+
+rexpr_occ1m:
+    r'[+]'
+
+rexpr_btm:
+    pattern
+    `args = None`
+    (args_def
+    `args = args_def.res`
+    )?
+    `_ctx.res = Pattern(pattern.res, is_code=pattern.is_code, args=args)`
+    | rule_ref `_ctx.res = rule_ref.res`
+    | rexpr_group `_ctx.res = rexpr_group.res`
+
+pattern:
+    pattern_str
+    ```
+_ctx.res = pattern_str.res
+_ctx.is_code = False
+    ```
+    |
+    pattern_code
+    ```
+_ctx.res = pattern_code.res
+_ctx.is_code = True
+    ```
+
+pattern_str:
+    'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
+    `_ctx.res = pattern_str.rem.group()`
+
+pattern_code:
+    r'(%+)((?:.|\n)*?)(\1)'
+    `_ctx.res = pattern_code.rem.group(2)`
+
+rule_ref:
+    r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])'
+    ```
+name = rule_ref.rem.group(1)
+_ctx.res = RuleRef(name)
+    ```
+
+rexpr_group:
+    brkt_beg
+    rexpr_or
+    brkt_end
+    `_ctx.res = rexpr_or.res`
