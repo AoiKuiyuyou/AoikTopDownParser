@@ -1,47 +1,73 @@
 # coding: utf-8
+from functools import partial
+import os.path
+import sys
+
 from aoikdyndocdsl.ext.all import nto as nto_dft
+from aoikdyndocdsl.ext.markdown.heading import hd_to_key
+from aoikdyndocdsl.ext.markdown.heading import hd_url
 from aoikdyndocdsl.ext.var import var
 from aoikdyndocdsl.ext.var import var_set
 from aoikdyndocdsl.ext.var import var_set_v2
+from aoikdyndocdsl.parser.ext import iarg_ctx
 from aoikdyndocdsl.parser.ext import iarg_psr
-from functools import partial
-import os.path
 
 
 #
 _FILE_READER_CACHE = {}
+
+_PREFIX_INFO_S = [
+    # [uri_prefix, path_prefix]
+    ('https://github.com/AoiKuiyuyou/AoikTopDownParserDemo/blob/0.1/',
+        '../AoikTopDownParserDemo/'),
+    ('src/', './src/'),
+    ('/', './'),
+]
 
 def file_reader(key, val, file_path=None, line_num=None):
     #
     if file_path is not None:
         file_path_2 = file_path
     else:
-        prefix_1 = '/'
-        prefix_1_len = len(prefix_1)
+        found = False
 
-        prefix_2 = 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo/blob/0.1/'
-        prefix_2_len = len(prefix_2)
+        for prefix_info in _PREFIX_INFO_S:
+            uri_prefix = prefix_info[0]
 
-        #
-        if val.startswith(prefix_1):
-            file_path_2 = val[prefix_1_len:]
-        elif val.startswith(prefix_2):
-            file_path_2 = val[prefix_2_len:]
-            file_path_2 = '../AoikTopDownParserDemo/' + file_path_2
-        else:
-            assert 0, (key, val, file_path_2)
+            if val.startswith(uri_prefix):
+                # 3xlIp4J
+                path_prefix = prefix_info[1]
+
+                if path_prefix is None:
+                    found = False
+                    break
+
+                file_path_2 = val[len(uri_prefix):]
+
+                if path_prefix:
+                    file_path_2 = path_prefix + file_path_2
+
+                found = True
+                break
+
+        if not found:
+            msg = 'File checking ignores: {} {}\n'.format(key, val)
+            sys.stderr.write(msg)
+            return None, None
 
         assert file_path_2
+
     assert file_path_2
 
     #
     if line_num is None:
-        file_path_2, sep, line_num = file_path_2.rpartition('#L')
-        assert sep == '#L'
-        line_num = int(line_num)
+        if '#L' in file_path_2:
+            file_path_2, sep, line_num = file_path_2.rpartition('#L')
 
-    assert file_path_2
-    assert line_num is not None
+            if not sep:
+                line_num = None
+            else:
+                line_num = int(line_num)
 
     #
     file_path_2 = os.path.normpath(file_path_2)
@@ -64,7 +90,11 @@ v = var
 
 vs = var_set
 
-vs2 = iarg_psr(partial(var_set_v2, file_reader=file_reader))
+vs2 = partial(var_set_v2, file_reader=file_reader)
+
+hk = hd_to_key
+
+h = hd_url
 
 #
 def nto(name):

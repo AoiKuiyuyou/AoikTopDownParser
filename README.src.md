@@ -1,13 +1,12 @@
 [:var_set('', """
 #/ Compile command
 aoikdyndocdsl -s README.src.md -n readme_nto.py::nto -g README.md
-""")
-]\
-[:vs('5eqqxLR', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo')]\
-[:vs('2uq9VEy', 'https://github.com/mk-fg/yapps')]\
-[:vs('9vOUd6m', 'http://theory.stanford.edu/~amitp/yapps/yapps2/manual/node2.html#SECTION00023000000000000000')]\
-[:vs('8xj0p4p', 'https://github.com/mk-fg/yapps/blob/master/yapps/runtime.py')]\
-[:vs('7bxUYde', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo/blob/0.1/src/aoiktopdownparserdemo/calc/parser.py')]
+""")]\
+[:vs2('5eqqxLR', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo')]\
+[:vs2('2uq9VEy', 'https://github.com/mk-fg/yapps')]\
+[:vs2('9vOUd6m', 'http://theory.stanford.edu/~amitp/yapps/yapps2/manual/node2.html#SECTION00023000000000000000')]\
+[:vs2('8xj0p4p', 'https://github.com/mk-fg/yapps/blob/master/yapps/runtime.py')]\
+[:vs2('7bxUYde', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo/blob/0.1/src/aoiktopdownparserdemo/calc/parser.py')]
 [:vs2('9bx8z2T', '437', code='eisp=self._scan_ei_sp,',
     file_path=r'../AoikTopDownParserDemo/src/aoiktopdownparserdemo/calc/parser.py#L436')]\
 [:vs2('2bYNfgD', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo/blob/0.1/src/aoiktopdownparserdemo/calc/parser_yapps.py#L21',
@@ -21,9 +20,9 @@ aoikdyndocdsl -s README.src.md -n readme_nto.py::nto -g README.md
 [:vs2('4otMKe4', '/src/aoiktopdownparser/gen/opts_const.py#L42', code='GS_CTX_VAR =')]\
 [:vs2('4upw76e', '/src/aoiktopdownparser/parser.py#L16', code='class AttrDict(dict):')]\
 [:vs2('7rqePsp', '/src/aoiktopdownparser/gen/opts_const.py#L128', code='SS_CTX_K_REM =')]\
-[:vs('5r99zAA', 'https://github.com/AoiKuiyuyou/AoikProjectStart-Python#package-bootstrap')]\
-[:vs('8y2409L', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo#setup')]\
-[:vs('5n9GmvG', 'https://github.com/AoiKuiyuyou/AoikImportUtil-Python#load-object')]\
+[:vs2('5r99zAA', 'https://github.com/AoiKuiyuyou/AoikProjectStart-Python#package-bootstrap')]\
+[:vs2('8y2409L', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo#setup')]\
+[:vs2('5n9GmvG', 'https://github.com/AoiKuiyuyou/AoikImportUtil-Python#load-object')]\
 [:vs2('6tgZJFh', '/src/aoiktopdownparser/gen/opts_const.py#L11', code='GS_VER =')]\
 [:vs2('6kzSZZQ', '/src/aoiktopdownparser/gen/opts_const.py#L14', code='GS_TPLT =')]\
 [:vs2('6a7MnEm', '/src/aoiktopdownparser/gen/opts_const.py#L19', code='GS_REO_PRF =')]\
@@ -62,14 +61,14 @@ aoikdyndocdsl -s README.src.md -n readme_nto.py::nto -g README.md
 [:vs2('2n3fedn', '/src/aoiktopdownparser/gen/opts_util.py#L85', code='rr = read_repo')]\
 [:vs2('3aN4ZMA', '/src/aoiktopdownparser/gen/opts.py#L32', code='GS_TPLT: rr')]\
 [:vs2('9eHK8N6', '/src/aoiktopdownparser/gen/opts_util.py#L23', code='v = Value')]\
-[:vs('8n7Y4By', '/src/aoiktopdownparser/gen/parser_tplt.py')]\
+[:vs2('8n7Y4By', '/src/aoiktopdownparser/gen/parser_tplt.py')]\
 [:vs2('5ckmIvM', '/src/aoiktopdownparser/gen/opts_const.py#L14', code='GS_TPLT =')]\
 [:vs2('9phIfY6', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo/blob/0.1/src/aoiktopdownparserdemo/calc/opts.py#L16', code='GS_TPLT:')]\
 [:vs2('3iUFpYu', '/src/aoiktopdownparser/gen/parser_tplt.py#L48', code='class {SS_PSR_CLS_NAME}(object):')]\
 [:vs2('8utvIR0', '/src/aoiktopdownparser/gen/opts_const.py#L134', code='SS_FILE_POF =')]\
-[:vs('9eIuBzK', '/src/aoiktopdownparser/gen/main_func_tplt.py')]\
+[:vs2('9eIuBzK', '/src/aoiktopdownparser/gen/main_func_tplt.py')]\
 [:vs2('2xWob7I', 'https://github.com/AoiKuiyuyou/AoikTopDownParserDemo/blob/0.1/src/aoiktopdownparserdemo/calc/opts.py#L22', code='SS_FILE_POF:')]\
-[:vs('3w88r2m', '/src/aoiktopdownparser/parser.py')]
+[:vs2('3w88r2m', '/src/aoiktopdownparser/parser.py')]
 [:HDLR('heading', 'heading')]\
 # AoikTopDownParser
 A top-down recursive-descendent LL(n>=1) parser generator.
