@@ -7,7 +7,7 @@ from setuptools import setup
 setup(
     name='AoikTopDownParser',
 
-    version='0.1',
+    version='0.1.1',
 
     description="""A top-down recursive-descendent LL(n>=1) parser generator.""",
 
@@ -18,7 +18,7 @@ setup(
 
     author='Aoi.Kuiyuyou',
 
-    author_email='aoi.kuiyuyou@google.com',
+    author_email='aoi.kuiyuyou@gmail.com',
 
     license='MIT',
 
