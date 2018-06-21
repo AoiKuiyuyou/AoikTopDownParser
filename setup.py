@@ -12,7 +12,7 @@ with open('requirements.txt') as requirements_file:
 setup(
     name='AoikTopDownParser',
 
-    version='0.1.1',
+    version='0.2.0',
 
     description='A top-down recursive-descendent parser generator.',
 
