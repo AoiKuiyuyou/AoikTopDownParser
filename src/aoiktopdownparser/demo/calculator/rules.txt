@@ -1,0 +1,24 @@
+goal:
+    expr end                `ctx.res = expr.res`
+
+expr:
+    factor                  `v = factor.res`
+    ( '[+]' factor          `v = v + factor.res`
+    |  '-'  factor          `v = v - factor.res`
+    )*                      `ctx.res = v`
+
+factor:
+    term                    `v = term.res`
+    ( '[*]' term            `v = v * term.res`
+    |  '/'  term            `v = v / term.res`
+    )*                      `ctx.res = v`
+
+term:
+    num                     `ctx.res = num.res`
+    | '[(]' expr '[)]'      `ctx.res = expr.res`
+
+num:
+    '[0-9]+'                `ctx.res = eval(num.rem.group())`
+
+end:
+    '$'

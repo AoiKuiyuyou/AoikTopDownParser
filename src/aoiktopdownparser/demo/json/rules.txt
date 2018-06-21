@@ -1,0 +1,108 @@
+expr:
+    lit_val
+    `ctx.res = lit_val.res`
+    |
+    list_def
+    `ctx.res = list_def.res`
+    |
+    dict_def
+    `ctx.res = dict_def.res`
+
+lit_val:
+    lit_str
+    `ctx.res = lit_str.res`
+    |
+    lit_num
+    `ctx.res = lit_num.res`
+    |
+    lit_bool
+    `ctx.res = lit_bool.res`
+    |
+    lit_null
+    `ctx.res = lit_null.res`
+
+lit_str:
+    r'(")((?:[^\\]|\\.)*?)(\1)'
+    `ctx.res = eval(lit_str.rem.group())`
+
+lit_num:
+    r"""
+([-+])?         # Sign
+(?=\d|[.]\d)    # Next is an integer part or a fraction part
+(\d*)           # Integer part
+([.]\d*)?       # Fraction part
+(e[-+]?\d+)?    # Exponent part
+""" @(flags='re.VERBOSE | re.IGNORECASE')
+    `ctx.res = eval(lit_num.rem.group())`
+
+lit_bool:
+    '(true|false)(?![a-zA-Z0-9_])'
+    `ctx.res = True if (lit_bool.rem.group() == 'true') else False`
+
+lit_null:
+    'null(?![a-zA-Z0-9_])'
+    `ctx.res = None`
+
+list_beg:
+    r'\['
+
+list_end:
+    r'\]'
+
+list_isep:
+    ','
+
+list_def:
+    `ctx.res = []`
+    list_beg
+    (
+        list_end
+        |
+        expr
+        `ctx.res.append(expr.res)`
+        (
+            list_isep
+            expr
+            `ctx.res.append(expr.res)`
+        )*
+        list_end
+    )
+
+dict_beg:
+    r'\{'
+
+dict_end:
+    r'\}'
+
+dict_isep:
+    ','
+
+dict_def:
+    `dict_items = []`
+    dict_beg
+    (
+        dict_end
+        |
+        dict_item
+        `dict_items.append(dict_item.res)`
+        (
+            dict_isep
+            dict_item
+            `dict_items.append(dict_item.res)`
+        )*
+        dict_end
+    )
+    `ctx.res = dict(dict_items)`
+
+dict_item:
+    dict_key
+    dict_kvsep
+    expr
+    `ctx.res = (dict_key.res, expr.res)`
+
+dict_key:
+    lit_str
+    `ctx.res = lit_str.res`
+
+dict_kvsep:
+    ':'
