@@ -1,15 +1,20 @@
 # coding: utf-8
 from __future__ import absolute_import
-import os
+
 from setuptools import find_packages
 from setuptools import setup
+
+
+with open('requirements.txt') as requirements_file:
+    install_requires = requirements_file.read().splitlines()
+
 
 setup(
     name='AoikTopDownParser',
 
     version='0.1.1',
 
-    description="""A top-down recursive-descendent LL(n>=1) parser generator.""",
+    description='A top-down recursive-descendent parser generator.',
 
     long_description="""`Documentation on Github
 <https://github.com/AoiKuiyuyou/AoikTopDownParser>`_""",
@@ -27,25 +32,31 @@ setup(
         'Environment :: Console',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
-        'Operating System :: Microsoft :: Windows',
-        'Operating System :: POSIX :: Linux',
+        'Operating System :: OS Independent ',
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.2',
-        'Programming Language :: Python :: 3.3',
-        'Programming Language :: Python :: 3.4',
+        'Programming Language :: Python :: 3.6',
     ],
 
     keywords='top down recursive descendent parser generator',
 
-    package_dir={'':'src'},
+    package_dir={'': 'src'},
 
     packages=find_packages('src'),
 
+    package_data={
+        'aoiktopdownparser': [
+            'demo/*/*',
+            'gen/me/*',
+        ],
+    },
+
+    install_requires=install_requires,
+
     entry_points={
         'console_scripts': [
-            'aoiktopdownparser=aoiktopdownparser.main.aoiktopdownparser:main',
+            'aoiktopdownparser=aoiktopdownparser.__main__:main',
         ],
     },
 )
