@@ -1,194 +1,184 @@
-{SS_FILE_PRF}# coding: utf-8
-{SS_IMPORTS_PRF}from __future__ import absolute_import
-import re
-import sys{SS_IMPORTS_POF}
+# coding: utf-8
+from __future__ import absolute_import
 
-#/
+from pprint import pformat
+import re
+import sys
+from traceback import format_exception
+{SS_IMPORTS}
+
+
 class AttrDict(dict):
     __getattr__ = dict.__getitem__
     __setattr__ = dict.__setitem__
 
-#/
+
 class ScanError(Exception):
 
     def __init__(self, ctx, txt, row, col, rep=None, eis=None, eisp=None):
-        #/
         self.ctx = ctx
 
-        #/
         newline_idx = txt.find('\n')
         if newline_idx >= 0:
             self.txt = txt[:newline_idx]
         else:
             self.txt = txt
 
-        #/
         self.row = row
 
         self.col = col
 
-        #/
         self.rep = rep
 
-        #/ scan exc infos of current branching
+        # scan exc infos of current branching
         self.eis = eis
 
-        #/ scan exc infos of previous branching
+        # scan exc infos of previous branching
         self.eisp = eisp
+
 
 Er = ScanError
 
-#/
+
 class ScanOk(Exception):
     pass
 
+
 Ok = ScanOk
 
-#/
-class {SS_PSR_CLS_NAME}(object):
 
-    #/
-    _RULE_FUNC_PRF = {SS_RULE_FUNC_PRF}
-    _RULE_FUNC_POF = {SS_RULE_FUNC_POF}
+class Parser(object):
 
-    #/ |SK| means state dict key
+    _RULE_FUNC_PRF = '{SS_RULE_FUNC_NAME_PRF}'
+    _RULE_FUNC_POF = '{SS_RULE_FUNC_NAME_POF}'
+
+    # `SK` means state dict key
+    #
+    # Text to parse
     _SK_TXT = 'txt'
+
+    # Row number (0-based)
     _SK_ROW = 'row'
+
+    # Column number (0-based)
     _SK_COL = 'col'
+
+    # Repeated occurrence
     _SK_OCC = 'occ'
 
-    #/ |DK| means debug dict key
+    # `DK` means debug dict key
+    #
+    # Rule name
     _DK_NAME = 'name'
-    _DK_TXT = 'txt'
-    _DK_ROW = 'row'
-    _DK_COL = 'col'
-    _DK_SLV = 'slv'
-    _DK_SSS = 'sss' # scan is success
 
-    #/
-    def __init__(self, {SS_INIT_FUNC_PARGS_PRF}txt{SS_INIT_FUNC_PARGS_POF}, {SS_INIT_FUNC_KARGS_PRF}debug=False{SS_INIT_FUNC_KARGS_POF}):
-        #/
+    # Text to parse
+    _DK_TXT = 'txt'
+
+    # Row number (0-based)
+    _DK_ROW = 'row'
+
+    # Column number (0-based)
+    _DK_COL = 'col'
+
+    # Scan level
+    _DK_SLV = 'slv'
+
+    # Scan is success
+    _DK_SSS = 'sss'
+
+
+{SS_RULE_REOS}
+
+    def __init__(self, txt, debug=False):
         self._txt = txt
 
         self._row = 0
 
         self._col = 0
 
-        #/
         self._debug = debug
 
-        #/
-        self._debug_info_s = None
+        self._debug_infos = None
 
         if self._debug:
-            self._debug_info_s = []
+            self._debug_infos = []
 
-        #/
         self._ws_rep = {SS_WS_REP}
 
         self._ws_reo = re.compile(self._ws_rep)\
             if self._ws_rep is not None else None
 
-        #/ current rule func's context dict
+        # Current rule func's context dict
         self._ctx = None
 
-        #/
-        self._ctx_k_par = '{SS_CTX_K_PAR}'
-
-        #/ scan level
+        # Scan level
         self._scan_lv = -1
 
-        #/ scan exc info
+        # Scan exc info
         self._scan_ei = None
 
-        #/ scan exc infos of current branching
-        self._scan_ei_s = []
+        # Scan exc infos of current branching
+        self._scan_eis = []
 
-        #/ scan exc infos of previous branching
-        self._scan_ei_sp = []
+        # Scan exc infos of previous branching
+        self._scan_eis_prev = []
 
-        #/ map rep to reo
-        self._reo_d = {}
-
-        #/
         self._state_stack = []
-{SS_INIT_FUNC_END}
+
     def _rule_func_get(self, name):
-        #/
         rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
 
-        #/
         rule_func = getattr(self, rule_func_name)
 
-        #/
         return rule_func
 
-    def _rule_reo_get(self, name):
-        #/
-        reo_name = self._RULE_REO_PRF \
-            + name \
-            + self._RULE_REO_POF
-
-        #/
-        reo = getattr(self, reo_name)
-
-        #/
-        return reo
-
     def _match(self, reo, txt):
-        #/
-        m = reo.match(txt)
+        matched = reo.match(txt)
 
-        #/
-        if m:
-            mlen = len(m.group())
+        if matched:
+            matched_len = len(matched.group())
 
-            if mlen > 0:
-                m_txt = txt[:mlen]
+            if matched_len > 0:
+                matched_txt = txt[:matched_len]
 
-                self._state_upd(m_txt)
+                self._update_state(matched_txt)
 
-                txt = txt[mlen:]
+                txt = txt[matched_len:]
 
-        #/
-        return m, txt
+        return matched, txt
 
-    def _scan(self, name):
-        #/
+    def _peek(self, reos):
+        for reo in reos:
+
+            matched = reo.match(self._txt)
+
+            if matched:
+                return True
+
+        return False
+
+    def _scan_rule(self, name):
         ctx_par = self._ctx
 
-        #/
         self._scan_lv += 1
 
-        #/
         if self._ws_reo:
             _, self._txt = self._match(self._ws_reo, self._txt)
 
-        #/
         ctx_new = AttrDict()
 
-        #/
-        ctx_new.{SS_CTX_K_NAME} = name
+        ctx_new.name = name
 
-        #/
-        if self._ctx_k_par:
-            ctx_new[self._ctx_k_par] = ctx_par
+        ctx_new.par = ctx_par
 
-        #/
         self._ctx = ctx_new
 
-        #/
         rule_func = self._rule_func_get(name)
 
-        #/ scan success
-        self._ss = False
-
-        #/ scan exc info
+        # Scan exc info
         self._scan_ei = None
 
-        #/
         if self._debug:
-            #/
             debug_info = AttrDict()
             debug_info[self._DK_NAME] = name
             debug_info[self._DK_TXT] = self._txt
@@ -197,26 +187,20 @@ class {SS_PSR_CLS_NAME}(object):
             debug_info[self._DK_SLV] = self._scan_lv
             debug_info[self._DK_SSS] = False
 
-            #/
-            self._debug_info_s.append(debug_info)
+            self._debug_infos.append(debug_info)
 
-        #/
         try:
             rule_func(ctx_new)
         except ScanError:
-            #/
-            ei = sys.exc_info()
+            exc_info = sys.exc_info()
 
-            #/
-            if self._scan_ei is None or self._scan_ei[1] is not ei[1]:
-                self._scan_ei = ei
+            if self._scan_ei is None or self._scan_ei[1] is not exc_info[1]:
+                self._scan_ei = exc_info
 
-                self._scan_ei_s.append(ei)
+                self._scan_eis.append(exc_info)
 
-            #/
             raise
         else:
-            #/
             if self._debug:
                 debug_info[self._DK_SSS] = True
         finally:
@@ -224,207 +208,44 @@ class {SS_PSR_CLS_NAME}(object):
 
             self._ctx = ctx_par
 
-        #/
-        self._ss = True
-
-        #/
         if self._ws_reo:
             _, self._txt = self._match(self._ws_reo, self._txt)
 
-        #/
         return ctx_new
 
     def _scan_reo(self, reo, new_ctx=False):
-        #/
-        m, self._txt = self._match(reo, self._txt)
+        matched, self._txt = self._match(reo, self._txt)
 
-        #/
-        if m is None:
+        if matched is None:
             self._error(rep=reo.pattern)
 
-        #/
         if new_ctx:
-            #/
             ctx = AttrDict()
 
-            #/
-            ctx.{SS_CTX_K_NAME} = ''
+            ctx.name = ''
 
-            #/
-            if self._ctx_k_par:
-                ctx[self._ctx_k_par] = self._ctx
+            ctx.par = self._ctx
         else:
             ctx = self._ctx
 
-        #/
-        ctx.{SS_CTX_K_REM} = m
+        ctx.rem = matched
 
-        #/
         return ctx
 
-    def _scan_rep(self, rep):
-        #/
-        reo = self._reo_d.get(rep, None)
-
-        if reo is None:
-            reo = self._reo_d[rep] = re.compile(rep)
-
-        #/
-        return self._scan_reo(reo, new_ctx=True)
-
-    def _state_push(self):
-        self._state_stack.append({
-            self._SK_TXT: self._txt,
-            self._SK_ROW: self._row,
-            self._SK_COL: self._col,
-            self._SK_OCC: 0,
-        })
-
-    def _state_pop(self):
-        res = self._state_stack.pop()
-        self._txt = res[self._SK_TXT]
-        self._row = res[self._SK_ROW]
-        self._col = res[self._SK_COL]
-        return res
-
-    def _state_save(self):
-        self._state_stack[-1][self._SK_TXT] = self._txt
-        self._state_stack[-1][self._SK_ROW] = self._row
-        self._state_stack[-1][self._SK_COL] = self._col
-        self._state_stack[-1][self._SK_OCC] += 1
-
-    def _state_upd(self, m_txt):
-        row_cnt = m_txt.count('\n')
+    def _update_state(self, matched_txt):
+        row_cnt = matched_txt.count('\n')
 
         if row_cnt == 0:
-            last_row_txt = m_txt
+            last_row_txt = matched_txt
 
             self._col += len(last_row_txt)
         else:
-            last_row_txt = m_txt[m_txt.rfind('\n')+1:]
+            last_row_txt = matched_txt[matched_txt.rfind('\n') + 1:]
 
             self._row += row_cnt
 
             self._col = len(last_row_txt)
-
-    def _or(self, succ=None):
-        if succ is None:
-            self._or_beg()
-        else:
-            self._or_end(succ)
-
-    def _or_beg(self):
-        #/
-        self._scan_ei_sp = self._scan_ei_s
-
-        self._scan_ei_s = []
-
-    def _or_end(self, succ):
-        if not succ:
-            self._error()
-
-    def _ori(self, succ=None):
-        if succ is None:
-            self._ori_beg()
-        else:
-            self._ori_end(succ)
-
-    def _ori_beg(self):
-        #/
-        self._state_push()
-
-    def _ori_end(self, succ):
-        #/
-        if succ:
-            #/
-            self._state_save()
-
-        #/
-        self._state_pop()
-
-        #/
-        if succ:
-            raise ScanOk()
-
-    def _o01(self, succ=None):
-        if succ is None:
-            self._o01_beg()
-        else:
-            self._o01_end(succ)
-
-    def _o01_beg(self):
-        #/
-        self._scan_ei_sp = self._scan_ei_s
-
-        self._scan_ei_s = []
-
-        #/
-        self._state_push()
-
-    def _o01_end(self, succ):
-        #/
-        if succ:
-            #/
-            self._state_save()
-
-        #/
-        self._state_pop()
-
-        #/
-        self._ss = True
-
-    def _o0m(self, succ=None):
-        if succ is None:
-            self._o0m_beg()
-        elif succ:
-            self._state_save()
-        else:
-            self._o0m_end()
-
-    def _o0m_beg(self):
-        #/
-        self._scan_ei_sp = self._scan_ei_s
-
-        self._scan_ei_s = []
-
-        #/
-        self._state_push()
-
-    def _o0m_end(self):
-        #/
-        self._state_pop()
-
-        #/
-        self._ss = True
-
-    def _o1m(self, succ=None):
-        if succ is None:
-            self._o1m_beg()
-        elif succ:
-            self._state_save()
-        else:
-            self._o1m_end()
-
-    def _o1m_beg(self):
-        #/
-        self._scan_ei_sp = self._scan_ei_s
-
-        self._scan_ei_s = []
-
-        #/
-        self._state_push()
-
-    def _o1m_end(self):
-        #/
-        res = self._state_pop()
-
-        #/
-        self._ss = res[self._SK_OCC] > 0
-
-        #/
-        if not self._ss:
-            self._error()
-
+{SS_BACKTRACKING_FUNCS}
     def _error(self, rep=None):
         raise ScanError(
             ctx=self._ctx,
@@ -432,34 +253,235 @@ class {SS_PSR_CLS_NAME}(object):
             row=self._row,
             col=self._col,
             rep=rep,
-            eis=self._scan_ei_s,
-            eisp=self._scan_ei_sp,
+            eis=self._scan_eis,
+            eisp=self._scan_eis_prev,
         )
 
-{SS_RULE_FUNCS_PRF}{SS_RULE_FUNCS}{SS_RULE_FUNCS_POF}
+{SS_RULE_FUNCS}
 
-#/
-def parse({SS_INIT_FUNC_PARGS_PRF}txt{SS_INIT_FUNC_PARGS_POF}, {SS_INIT_FUNC_KARGS_PRF}debug=False{SS_INIT_FUNC_KARGS_POF}, rule=None):
-    #/
-    parser = {SS_PSR_CLS_NAME}(
-        {SS_INIT_CALL_PARGS_PRF}txt=txt{SS_INIT_CALL_PARGS_POF},
-        {SS_INIT_CALL_KARGS_PRF}debug=debug{SS_INIT_CALL_KARGS_POF},
+
+def parse(txt, rule=None, debug=False):
+    parser = Parser(
+        txt=txt,
+        debug=debug,
     )
 
-    #/
     if rule is None:
         rule = '{SS_ENTRY_RULE}'
 
-    #/
-    res = None
+    parsing_result = None
 
-    ei = None
+    exc_info = None
 
     try:
-        res = parser._scan(rule)
+        parsing_result = parser._scan_rule(rule)
     except Exception:
-        ei = sys.exc_info()
-{SS_PARSE_FUNC_END}
-    #/
-    return parser, res, ei
-{SS_FILE_POF}
+        exc_info = sys.exc_info()
+
+    return parser, parsing_result, exc_info
+
+
+def parser_debug_infos_to_msg(debug_infos, txt):
+    rows = txt.split('\n')
+
+    msgs = []
+
+    for debug_info in debug_infos:
+        row_txt = rows[debug_info.row]
+
+        msg = '{indent}{err}{name}: {row}.{col}: |{txt}|{row_txt}'.format(
+            name=debug_info.name,
+            indent='    ' * debug_info.slv,
+            err='' if debug_info.sss else '!',
+            row=debug_info.row + 1,
+            col=debug_info.col + 1,
+            txt=row_txt[debug_info.col:],
+            row_txt=(
+                ', |' + row_txt[:debug_info.col] + '^' +
+                row_txt[debug_info.col:] + '|'
+            )
+            if debug_info.col != 0 else '',
+        )
+
+        msgs.append(msg)
+
+    msg = '\n'.join(msgs)
+
+    return msg
+
+
+def scan_errror_to_msg(exc_info, exc_class, title, txt):
+    msg = title
+
+    exc = exc_info[1]
+
+    if not isinstance(exc, exc_class):
+        tb_lines = format_exception(*exc_info)
+
+        tb_msg = ''.join(tb_lines)
+
+        msg += '\n---\n{}---\n'.format(tb_msg)
+
+        return msg
+
+    msgs = []
+
+    msgs.append(msg)
+
+    ctx_names = get_ctx_names(exc.ctx)
+
+    ctx_msg = ''
+
+    if ctx_names:
+        ctx_msg = ' '.join(ctx_names)
+
+    rows = txt.split('\n')
+
+    row_txt = rows[exc.row]
+
+    col_mark = ' ' * exc.col + '^'
+
+    msg = (
+        '# `{rule}` failed at {row}.{col} ({ctx_msg})\n'
+        '{row_txt}\n'
+        '{col_mark}'
+    ).format(
+        rule=exc.ctx.name,
+        row=exc.row + 1,
+        col=exc.col + 1,
+        ctx_msg=ctx_msg,
+        row_txt=row_txt,
+        col_mark=col_mark,
+    )
+
+    msgs.append(msg)
+
+    reason_exc_infos = []
+
+    if exc.eisp:
+        reason_exc_infos.extend(ei for ei in exc.eisp if ei[1] is not exc)
+
+    if exc.eis:
+        reason_exc_infos.extend(ei for ei in exc.eis if ei[1] is not exc)
+
+    if reason_exc_infos:
+        msg = 'Possible reasons:'
+
+        msgs.append(msg)
+
+        for reason_exc_info in reason_exc_infos:
+            exc = reason_exc_info[1]
+
+            ctx_names = get_ctx_names(exc.ctx)
+
+            ctx_msg = ''
+
+            if ctx_names:
+                ctx_msg = ' '.join(ctx_names)
+
+            row_txt = rows[exc.row]
+
+            col_mark = ' ' * exc.col + '^'
+
+            msg = (
+                '# `{rule}` failed at {row}.{col} ({ctx_msg})\n'
+                '{row_txt}\n'
+                '{col_mark}'
+            ).format(
+                rule=exc.ctx.name,
+                row=exc.row + 1,
+                col=exc.col + 1,
+                ctx_msg=ctx_msg,
+                row_txt=row_txt,
+                col_mark=col_mark,
+            )
+
+            msgs.append(msg)
+
+    msg = '\n\n'.join(msgs)
+
+    return msg
+
+
+def get_ctx_names(ctx):
+    ctx_names = []
+
+    ctx_name = getattr(ctx, 'name')
+
+    ctx_names.append(ctx_name)
+
+    while True:
+        ctx = getattr(ctx, 'par', None)
+
+        if ctx is None:
+            break
+
+        name = getattr(ctx, 'name')
+
+        ctx_names.append(name)
+
+    ctx_names = list(reversed(ctx_names))
+
+    return ctx_names
+
+
+def main(args=None):
+    from argparse import ArgumentParser
+
+    args_parser = ArgumentParser()
+
+    args_parser.add_argument('-f', dest='input_file_path', required=True)
+
+    args_parser.add_argument('-d', dest='debug_on', action='store_true')
+
+    args_obj = args_parser.parse_args(args)
+
+    input_file_path = args_obj.input_file_path
+
+    try:
+        rules_txt = open(input_file_path).read()
+    except Exception:
+        msg = 'Failed reading input file: `{0}`\n'.format(input_file_path)
+
+        sys.stderr.write(msg)
+
+        return 1
+
+    debug_on = args_obj.debug_on
+
+    parser, parsing_result, exc_info = parse(rules_txt, debug=debug_on)
+
+    if debug_on and parser._debug_infos:
+        msg = '# Parser debug info\n'
+
+        msg += parser_debug_infos_to_msg(
+            debug_infos=parser._debug_infos, txt=rules_txt
+        )
+
+        msg += '\n\n'
+
+        sys.stderr.write(msg)
+
+    if exc_info is not None:
+        msg = scan_errror_to_msg(
+            exc_info=exc_info,
+            exc_class=ScanError,
+            title='# Parsing error',
+            txt=rules_txt,
+        )
+
+        sys.stderr.write(msg)
+
+        return 2
+
+    msg = '# Parsing result\n{0}\n'.format(
+        pformat(parsing_result, indent=4, width=1)
+    )
+
+    sys.stderr.write(msg)
+
+    return 0
+
+
+if __name__ == '__main__':
+    exit(main())

@@ -1,22 +1,19 @@
 # coding: utf-8
 from __future__ import absolute_import
+
 import sys
-import traceback
 
-#/
-__version__ = '0.1'
 
-#/
 IS_PY2 = sys.version_info[0] == 2
 
-#/ define |exec_| and |raise_| that are 2*3 compatible.
-##
-## Modified from |six|:
-##  https://bitbucket.org/gutworth/six/src/cc9fce6016db076497454f9352e55b4758ccc07c/six.py?at=default#cl-632
-##
-## ---BEG
+
+# define `exec_` and `raise_` that are 2*3 compatible.
+#
+# Modified from |six|:
+# https://bitbucket.org/gutworth/six/src/e5218c3f66a2614acb7572204a27e2b508682168/six.py?at=1.10.0#six.py-678
+#
+# ----- BEG -----
 if IS_PY2:
-    #/
     def exec_(_code_, _globs_=None, _locs_=None):
         """Execute code in a namespace."""
         if _globs_ is None:
@@ -29,35 +26,15 @@ if IS_PY2:
             _locs_ = _globs_
         exec("""exec _code_ in _globs_, _locs_""")
 
-    #/
     exec_("""def raise_(exc, tb=None):
     raise exc, None, tb
 """)
 else:
-    #/
     exec_ = eval('exec')
 
-    #/
     def raise_(exc, tb=None):
         if tb is not None and exc.__traceback__ is not tb:
             raise exc.with_traceback(tb)
         else:
             raise exc
-## ---END
-
-#/
-def get_traceback_stxt(exc_info=None):
-    """
-    Result is (bytes) str type on Python 2 and (unicode) str type on Python 3.
-    """
-    #/
-    exc_cls, exc_obj, tb_obj = \
-        (exc_info if exc_info is not None else sys.exc_info())
-
-    #/
-    txt_s = traceback.format_exception(exc_cls, exc_obj, tb_obj)
-
-    #/
-    res = ''.join(txt_s)
-
-    return res
+# ----- END -----

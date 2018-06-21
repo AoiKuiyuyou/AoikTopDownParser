@@ -1,16 +1,25 @@
 all:
+    `ctx.opts = None`
     (
-    `_ctx.args = None`
     args_def
-    `_ctx.args = args_def.res`)?
+    `ctx.opts = args_def.res`
+    )?
     rule_seq
-    `_ctx.rule_def_s = rule_seq.res`
+    `ctx.rule_defs = rule_seq.res`
     '$'
 
 args_def:
     args_sign
     args_group
-    `_ctx.res = self._opts_get(args_group)`
+    ```
+pairs = []
+item = args_group
+while 'arg_item' in item:
+    pairs.append(item.arg_item.res)
+    item = item.arg_item
+args = dict(pairs)
+ctx.res = args
+    ```
 
 args_sign:
     r'@'
@@ -27,8 +36,8 @@ brkt_end:
 arg_item:
     arg_expr
     ```
-_ctx.res = arg_expr.res
-_ctx.par.arg_item = _ctx
+ctx.res = arg_expr.res
+ctx.par.arg_item = ctx
     ```
     (brkt_end | arg_sep (brkt_end | arg_item))
 
@@ -36,54 +45,54 @@ arg_expr:
     arg_key
     arg_kvsep
     arg_val
-    `_ctx.res = (arg_key.res, arg_val.res)`
+    `ctx.res = (arg_key.res, arg_val.res)`
 
 arg_key:
     r'[a-zA-Z_][a-zA-Z0-9_]*'
-    `_ctx.res = arg_key.rem.group()`
+    `ctx.res = arg_key.rem.group()`
 
 arg_kvsep:
     r'[=]'
 
 arg_val:
     lit_val
-    `_ctx.res = lit_val.res`
+    `ctx.res = lit_val.res`
 
 lit_val:
-    lit_str `_ctx.res = lit_str.res`
-    | lit_num `_ctx.res = lit_num.res`
-    | lit_bool `_ctx.res = lit_bool.res`
-    | lit_none `_ctx.res = lit_none.res`
+    lit_str `ctx.res = lit_str.res`
+    | lit_num `ctx.res = lit_num.res`
+    | lit_bool `ctx.res = lit_bool.res`
+    | lit_none `ctx.res = lit_none.res`
 
 lit_str:
     'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
-    `_ctx.res = eval(lit_str.rem.group())`
+    `ctx.res = eval(lit_str.rem.group())`
 
 lit_num:
     r"""
-([-+])?         # sign
-(?=\d|[.]\d)    # next is an integer part or a fraction part
-(\d*)           # integer part
-([.]\d*)?       # fraction part
-(e[-+]?\d+)?    # exponent part
+([-+])?         # Sign
+(?=\d|[.]\d)    # Next is an integer part or a fraction part
+(\d*)           # Integer part
+([.]\d*)?       # Fraction part
+(e[-+]?\d+)?    # Exponent part
 """ @(flags='re.VERBOSE | re.IGNORECASE')
-    `_ctx.res = eval(lit_num.rem.group())`
+    `ctx.res = eval(lit_num.rem.group())`
 
 lit_bool:
     r'(True|False)(?![a-zA-Z0-9_])'
-    `_ctx.res = True if (lit_bool.rem.group() == 'True') else False`
+    `ctx.res = True if (lit_bool.rem.group() == 'True') else False`
 
 lit_none:
     r'None(?![a-zA-Z0-9_])'
-    `_ctx.res = None`
+    `ctx.res = None`
 
 arg_sep:
     r'[,]'
 
 rule_seq:
-    `_ctx.res = []`
+    `ctx.res = []`
     (rule_def
-    `_ctx.res.append(rule_def.res)`
+    `ctx.res.append(rule_def.res)`
     )+
 
 rule_def:
@@ -94,39 +103,39 @@ rule_def:
     `args = args_def.res`
     )?
     rexpr_or
-    `_ctx.res = RuleDef(name=rule_name.res, expr=rexpr_or.res, args=args)`
+    `ctx.res = RuleDef(name=rule_name.res, expr=rexpr_or.res, args=args)`
 
 rule_name:
     r'[a-zA-Z_][a-zA-Z0-9_]*'
-    `_ctx.res = rule_name.rem.group()`
+    `ctx.res = rule_name.rem.group()`
 
 rule_colon:
     r'[:]'
 
 rexpr_or:
     rexpr_seq
-    `item_s = [rexpr_seq.res]`
+    `items = [rexpr_seq.res]`
     (rexpr_op
     rexpr_seq
-    `item_s.append(rexpr_seq.res)`
+    `items.append(rexpr_seq.res)`
     )*
-    `_ctx.res = ExprOr(item_s) if len(item_s) > 1 else item_s[0]`
+    `ctx.res = ExprOr(items) if len(items) > 1 else items[0]`
 
 rexpr_op:
     r'[|]'
 
 rexpr_seq:
-    `item_s = []`
+    `items = []`
     (
-        (code `item_s.append(code.res)`)*
-        rexpr_occ `item_s.append(rexpr_occ.res)`
-        (code `item_s.append(code.res)`)*
+        (code `items.append(code.res)`)*
+        rexpr_occ `items.append(rexpr_occ.res)`
+        (code `items.append(code.res)`)*
     ) +
-    `_ctx.res = ExprSeq(item_s) if len(item_s) > 1 else item_s[0]`
+    `ctx.res = ExprSeq(items) if len(items) > 1 else items[0]`
 
 code:
     r'(`+)((?:.|\n)*?)\1'
-    `_ctx.res = Code(code.rem.group(2))`
+    `ctx.res = Code(code.rem.group(2))`
 
 rexpr_occ:
     rexpr_btm
@@ -137,13 +146,13 @@ rexpr_occ:
     )?
     ```
 if occ_type is None:
-    _ctx.res = rexpr_btm.res
+    ctx.res = rexpr_btm.res
 elif occ_type == '01':
-    _ctx.res = ExprOcc01(rexpr_btm.res)
+    ctx.res = ExprOcc01(rexpr_btm.res)
 elif occ_type == '0m':
-    _ctx.res = ExprOcc0m(rexpr_btm.res)
+    ctx.res = ExprOcc0m(rexpr_btm.res)
 elif occ_type == '1m':
-    _ctx.res = ExprOcc1m(rexpr_btm.res)
+    ctx.res = ExprOcc1m(rexpr_btm.res)
 else:
     assert 0
     ```
@@ -163,40 +172,23 @@ rexpr_btm:
     (args_def
     `args = args_def.res`
     )?
-    `_ctx.res = Pattern(pattern.res, is_code=pattern.is_code, args=args)`
-    | rule_ref `_ctx.res = rule_ref.res`
-    | rexpr_group `_ctx.res = rexpr_group.res`
+    `ctx.res = Pattern(pattern.res, args=args)`
+    | rule_ref `ctx.res = rule_ref.res`
+    | rexpr_group `ctx.res = rexpr_group.res`
 
 pattern:
-    pattern_str
-    ```
-_ctx.res = pattern_str.res
-_ctx.is_code = False
-    ```
-    |
-    pattern_code
-    ```
-_ctx.res = pattern_code.res
-_ctx.is_code = True
-    ```
-
-pattern_str:
     'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
-    `_ctx.res = pattern_str.rem.group()`
-
-pattern_code:
-    r'(%+)((?:.|\n)*?)(\1)'
-    `_ctx.res = pattern_code.rem.group(2)`
+    `ctx.res = pattern.rem.group()`
 
 rule_ref:
     r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])'
     ```
 name = rule_ref.rem.group(1)
-_ctx.res = RuleRef(name)
+ctx.res = RuleRef(name)
     ```
 
 rexpr_group:
     brkt_beg
     rexpr_or
     brkt_end
-    `_ctx.res = rexpr_or.res`
+    `ctx.res = rexpr_or.res`
