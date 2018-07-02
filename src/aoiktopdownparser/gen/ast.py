@@ -206,7 +206,7 @@ class RuleDef(AstNode):
         return self.expr.get_rule_refs()
 
     def get_first_set(self, to_first_set):
-        return self.expr.get_first_set(to_first_set)
+        return set(self.expr.get_first_set(to_first_set))
 
 
 class RuleRef(AstNode):
@@ -448,7 +448,9 @@ class ExprOcc01(AstNode):
         return self.item.get_rule_refs()
 
     def get_first_set(self, to_first_set):
-        first_set = self.item.get_first_set(to_first_set)
+        item_first_set = self.item.get_first_set(to_first_set)
+
+        first_set = set(item_first_set)
 
         first_set.add(EMPTY_PATTERN_INFO)
 
@@ -510,7 +512,9 @@ class ExprOcc0m(AstNode):
         return self.item.get_rule_refs()
 
     def get_first_set(self, to_first_set):
-        first_set = self.item.get_first_set(to_first_set)
+        item_first_set = self.item.get_first_set(to_first_set)
+
+        first_set = set(item_first_set)
 
         first_set.add(EMPTY_PATTERN_INFO)
 
@@ -575,7 +579,7 @@ class ExprOcc1m(AstNode):
         return self.item.get_rule_refs()
 
     def get_first_set(self, to_first_set):
-        return self.item.get_first_set(to_first_set)
+        return set(self.item.get_first_set(to_first_set))
 
 
 def get_peek_args_txt(first_set, to_reo_name):
