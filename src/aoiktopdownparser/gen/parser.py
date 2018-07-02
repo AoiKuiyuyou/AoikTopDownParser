@@ -97,23 +97,26 @@ class Parser(object):
 
 
     _REO_01 = re.compile('$')
-    _REO_02 = re.compile(r'@')
-    _REO_03 = re.compile(r'[(]')
-    _REO_04 = re.compile(r'[)]')
-    _REO_05 = re.compile(r'[*]')
-    _REO_06 = re.compile(r'[+]')
-    _REO_07 = re.compile(r'[,]')
-    _REO_08 = re.compile(r'[:]')
-    _REO_09 = re.compile(r'[=]')
-    _REO_10 = re.compile(r'[?]')
-    _REO_11 = re.compile(r'[|]')
-    _REO_12 = re.compile(r'(`+)((?:.|\n)*?)\1')
-    _REO_13 = re.compile(r'None(?![a-zA-Z0-9_])')
-    _REO_14 = re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*')
-    _REO_15 = re.compile(r'(True|False)(?![a-zA-Z0-9_])')
-    _REO_16 = re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)')
-    _REO_17 = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])')
-    _REO_18 = re.compile(r"""
+    _REO_02 = re.compile('@')
+    _REO_03 = re.compile('[(]')
+    _REO_04 = re.compile('[)]')
+    _REO_05 = re.compile('[*]')
+    _REO_06 = re.compile('[+]')
+    _REO_07 = re.compile('[,]')
+    _REO_08 = re.compile('[:]')
+    _REO_09 = re.compile('[=]')
+    _REO_10 = re.compile('[?]')
+    _REO_11 = re.compile('[|]')
+    _REO_12 = re.compile(r'\[')
+    _REO_13 = re.compile(r'\]')
+    _REO_14 = re.compile(r'(`+)((?:.|\n)*?)\1')
+    _REO_15 = re.compile('None(?![a-zA-Z0-9_])')
+    _REO_16 = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
+    _REO_17 = re.compile(r'[a-zA-Z_][a-zA-Z0-9_]*')
+    _REO_18 = re.compile('(True|False)(?![a-zA-Z0-9_])')
+    _REO_19 = re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)')
+    _REO_20 = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])')
+    _REO_21 = re.compile(r"""
     ([-+])?         # Sign
     (?=\d|[.]\d)    # Next is an integer part or a fraction part
     (\d*)           # Integer part
@@ -324,7 +327,7 @@ class Parser(object):
         brkt_beg = self._scan_rule('brkt_beg')
         if self._peek([self._REO_04]):
             brkt_end = self._scan_rule('brkt_end')
-        elif self._peek([self._REO_14]):
+        elif self._peek([self._REO_16]):
             arg_item = self._scan_rule('arg_item')
         else:
             self._error()
@@ -347,7 +350,7 @@ class Parser(object):
             arg_sep = self._scan_rule('arg_sep')
             if self._peek([self._REO_04]):
                 brkt_end = self._scan_rule('brkt_end')
-            elif self._peek([self._REO_14]):
+            elif self._peek([self._REO_16]):
                 arg_item = self._scan_rule('arg_item')
             else:
                 self._error()
@@ -363,7 +366,7 @@ class Parser(object):
         #```
     
     def arg_key(self, ctx):
-        arg_key = self._scan_reo(self._REO_14)
+        arg_key = self._scan_reo(self._REO_16)
         #```
         ctx.res = arg_key.rem.group()
         #```
@@ -378,22 +381,22 @@ class Parser(object):
         #```
     
     def lit_val(self, ctx):
-        if self._peek([self._REO_16]):
+        if self._peek([self._REO_19]):
             lit_str = self._scan_rule('lit_str')
             #```
             ctx.res = lit_str.res
             #```
-        elif self._peek([self._REO_18]):
+        elif self._peek([self._REO_21]):
             lit_num = self._scan_rule('lit_num')
             #```
             ctx.res = lit_num.res
             #```
-        elif self._peek([self._REO_15]):
+        elif self._peek([self._REO_18]):
             lit_bool = self._scan_rule('lit_bool')
             #```
             ctx.res = lit_bool.res
             #```
-        elif self._peek([self._REO_13]):
+        elif self._peek([self._REO_15]):
             lit_none = self._scan_rule('lit_none')
             #```
             ctx.res = lit_none.res
@@ -402,25 +405,25 @@ class Parser(object):
             self._error()
     
     def lit_str(self, ctx):
-        lit_str = self._scan_reo(self._REO_16)
+        lit_str = self._scan_reo(self._REO_19)
         #```
         ctx.res = eval(lit_str.rem.group())
         #```
     
     def lit_num(self, ctx):
-        lit_num = self._scan_reo(self._REO_18)
+        lit_num = self._scan_reo(self._REO_21)
         #```
         ctx.res = eval(lit_num.rem.group())
         #```
     
     def lit_bool(self, ctx):
-        lit_bool = self._scan_reo(self._REO_15)
+        lit_bool = self._scan_reo(self._REO_18)
         #```
         ctx.res = True if (lit_bool.rem.group() == 'True') else False
         #```
     
     def lit_none(self, ctx):
-        lit_none = self._scan_reo(self._REO_13)
+        lit_none = self._scan_reo(self._REO_15)
         #```
         ctx.res = None
         #```
@@ -432,9 +435,9 @@ class Parser(object):
         #```
         ctx.res = []
         #```
-        if not self._peek([self._REO_14]):
+        if not self._peek([self._REO_17]):
             self._error()
-        while self._peek([self._REO_14]):
+        while self._peek([self._REO_17]):
             rule_def = self._scan_rule('rule_def')
             #```
             ctx.res.append(rule_def.res)
@@ -451,13 +454,13 @@ class Parser(object):
             #```
             args = args_def.res
             #```
-        rexpr_or = self._scan_rule('rexpr_or')
+        or_expr = self._scan_rule('or_expr')
         #```
-        ctx.res = RuleDef(name=rule_name.res, expr=rexpr_or.res, args=args)
+        ctx.res = RuleDef(name=rule_name.res, expr=or_expr.res, args=args)
         #```
     
     def rule_name(self, ctx):
-        rule_name = self._scan_reo(self._REO_14)
+        rule_name = self._scan_reo(self._REO_17)
         #```
         ctx.res = rule_name.rem.group()
         #```
@@ -465,47 +468,49 @@ class Parser(object):
     def rule_colon(self, ctx):
         rule_colon = self._scan_reo(self._REO_08)
     
-    def rexpr_or(self, ctx):
-        rexpr_seq = self._scan_rule('rexpr_seq')
+    def or_expr(self, ctx):
+        seq_expr = self._scan_rule('seq_expr')
         #```
-        items = [rexpr_seq.res]
+        items = [seq_expr.res]
         #```
         while self._peek([self._REO_11]):
-            rexpr_op = self._scan_rule('rexpr_op')
-            rexpr_seq = self._scan_rule('rexpr_seq')
+            or_expr_op = self._scan_rule('or_expr_op')
+            seq_expr = self._scan_rule('seq_expr')
             #```
-            items.append(rexpr_seq.res)
+            items.append(seq_expr.res)
             #```
         #```
         ctx.res = ExprOr(items) if len(items) > 1 else items[0]
         #```
     
-    def rexpr_op(self, ctx):
-        rexpr_op = self._scan_reo(self._REO_11)
+    def or_expr_op(self, ctx):
+        or_expr_op = self._scan_reo(self._REO_11)
     
-    def rexpr_seq(self, ctx):
+    def seq_expr(self, ctx):
         #```
         items = []
         #```
         if not self._peek([self._REO_03,
             self._REO_12,
-            self._REO_16,
-            self._REO_17]):
+            self._REO_14,
+            self._REO_19,
+            self._REO_20]):
             self._error()
         while self._peek([self._REO_03,
             self._REO_12,
-            self._REO_16,
-            self._REO_17]):
-            while self._peek([self._REO_12]):
+            self._REO_14,
+            self._REO_19,
+            self._REO_20]):
+            while self._peek([self._REO_14]):
                 code = self._scan_rule('code')
                 #```
                 items.append(code.res)
                 #```
-            rexpr_occ = self._scan_rule('rexpr_occ')
+            occ_expr = self._scan_rule('occ_expr')
             #```
-            items.append(rexpr_occ.res)
+            items.append(occ_expr.res)
             #```
-            while self._peek([self._REO_12]):
+            while self._peek([self._REO_14]):
                 code = self._scan_rule('code')
                 #```
                 items.append(code.res)
@@ -515,61 +520,85 @@ class Parser(object):
         #```
     
     def code(self, ctx):
-        code = self._scan_reo(self._REO_12)
+        code = self._scan_reo(self._REO_14)
         #```
         ctx.res = Code(code.rem.group(2))
         #```
     
-    def rexpr_occ(self, ctx):
-        rexpr_btm = self._scan_rule('rexpr_btm')
-        #```
-        occ_type = None
-        #```
-        if self._peek([self._REO_05,
-            self._REO_06,
-            self._REO_10]):
-            if self._peek([self._REO_10]):
-                rexpr_occ01 = self._scan_rule('rexpr_occ01')
-                #```
-                occ_type = '01'
-                #```
-            elif self._peek([self._REO_05]):
-                rexpr_occ0m = self._scan_rule('rexpr_occ0m')
-                #```
-                occ_type = '0m'
-                #```
-            elif self._peek([self._REO_06]):
-                rexpr_occ1m = self._scan_rule('rexpr_occ1m')
-                #```
-                occ_type = '1m'
-                #```
+    def occ_expr(self, ctx):
+        if self._peek([self._REO_12]):
+            occ01_group = self._scan_rule('occ01_group')
+            #```
+            ctx.res = ExprOcc01(occ01_group.res)
+            #```
+        elif self._peek([self._REO_03,
+            self._REO_19,
+            self._REO_20]):
+            atom = self._scan_rule('atom')
+            #```
+            occ_type = None
+            #```
+            if self._peek([self._REO_05,
+                self._REO_06,
+                self._REO_10]):
+                if self._peek([self._REO_10]):
+                    occ01_trailer = self._scan_rule('occ01_trailer')
+                    #```
+                    occ_type = 0
+                    #```
+                elif self._peek([self._REO_05]):
+                    occ0m_trailer = self._scan_rule('occ0m_trailer')
+                    #```
+                    occ_type = 1
+                    #```
+                elif self._peek([self._REO_06]):
+                    occ1m_trailer = self._scan_rule('occ1m_trailer')
+                    #```
+                    occ_type = 2
+                    #```
+                else:
+                    self._error()
+            #```
+            if occ_type is None:
+                ctx.res = atom.res
+            elif occ_type == 0:
+                ctx.res = ExprOcc01(atom.res)
+            elif occ_type == 1:
+                ctx.res = ExprOcc0m(atom.res)
+            elif occ_type == 2:
+                ctx.res = ExprOcc1m(atom.res)
             else:
-                self._error()
-        #```
-        if occ_type is None:
-            ctx.res = rexpr_btm.res
-        elif occ_type == '01':
-            ctx.res = ExprOcc01(rexpr_btm.res)
-        elif occ_type == '0m':
-            ctx.res = ExprOcc0m(rexpr_btm.res)
-        elif occ_type == '1m':
-            ctx.res = ExprOcc1m(rexpr_btm.res)
+                assert 0
+            #```
         else:
-            assert 0
+            self._error()
+    
+    def occ01_group(self, ctx):
+        sqrbrkt_beg = self._scan_rule('sqrbrkt_beg')
+        or_expr = self._scan_rule('or_expr')
+        sqrbrkt_end = self._scan_rule('sqrbrkt_end')
+        #```
+        ctx.res = or_expr.res
         #```
     
-    def rexpr_occ01(self, ctx):
-        rexpr_occ01 = self._scan_reo(self._REO_10)
+    def sqrbrkt_beg(self, ctx):
+        sqrbrkt_beg = self._scan_reo(self._REO_12)
     
-    def rexpr_occ0m(self, ctx):
-        rexpr_occ0m = self._scan_reo(self._REO_05)
+    def sqrbrkt_end(self, ctx):
+        sqrbrkt_end = self._scan_reo(self._REO_13)
     
-    def rexpr_occ1m(self, ctx):
-        rexpr_occ1m = self._scan_reo(self._REO_06)
+    def occ01_trailer(self, ctx):
+        occ01_trailer = self._scan_reo(self._REO_10)
     
-    def rexpr_btm(self, ctx):
-        if self._peek([self._REO_16]):
-            pattern = self._scan_rule('pattern')
+    def occ0m_trailer(self, ctx):
+        occ0m_trailer = self._scan_reo(self._REO_05)
+    
+    def occ1m_trailer(self, ctx):
+        occ1m_trailer = self._scan_reo(self._REO_06)
+    
+    def atom(self, ctx):
+        if self._peek([self._REO_19]):
+            regex_str = self._scan_rule('regex_str')
             #```
             args = None
             #```
@@ -579,40 +608,40 @@ class Parser(object):
                 args = args_def.res
                 #```
             #```
-            ctx.res = Pattern(pattern.res, args=args)
+            ctx.res = Pattern(regex_str.res, args=args)
             #```
-        elif self._peek([self._REO_17]):
+        elif self._peek([self._REO_20]):
             rule_ref = self._scan_rule('rule_ref')
             #```
             ctx.res = rule_ref.res
             #```
         elif self._peek([self._REO_03]):
-            rexpr_group = self._scan_rule('rexpr_group')
+            group = self._scan_rule('group')
             #```
-            ctx.res = rexpr_group.res
+            ctx.res = group.res
             #```
         else:
             self._error()
     
-    def pattern(self, ctx):
-        pattern = self._scan_reo(self._REO_16)
+    def regex_str(self, ctx):
+        regex_str = self._scan_reo(self._REO_19)
         #```
-        ctx.res = pattern.rem.group()
+        ctx.res = regex_str.rem.group()
         #```
     
     def rule_ref(self, ctx):
-        rule_ref = self._scan_reo(self._REO_17)
+        rule_ref = self._scan_reo(self._REO_20)
         #```
         name = rule_ref.rem.group(1)
         ctx.res = RuleRef(name)
         #```
     
-    def rexpr_group(self, ctx):
+    def group(self, ctx):
         brkt_beg = self._scan_rule('brkt_beg')
-        rexpr_or = self._scan_rule('rexpr_or')
+        or_expr = self._scan_rule('or_expr')
         brkt_end = self._scan_rule('brkt_end')
         #```
-        ctx.res = rexpr_or.res
+        ctx.res = or_expr.res
         #```
 
 
