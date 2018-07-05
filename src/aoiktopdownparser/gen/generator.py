@@ -116,7 +116,10 @@ def get_parser_txt(rules, opts, find_odf):
             str(pattern_index + 1).zfill(zfill_len)
         )
 
-    # Map rule name to referring rules
+    # Map rule name to rule def
+    to_rule = {}
+
+    # Map rule name to referring rule def
     to_referring_rules = {}
 
     # Map rule name to first set of pattern infos
@@ -126,6 +129,8 @@ def get_parser_txt(rules, opts, find_odf):
     changed_rule_names = set()
 
     for rule in rules:
+        to_rule[rule.name] = rule
+
         to_first_set[rule.name] = set()
 
         rule_refs = rule.get_rule_refs()
@@ -139,7 +144,7 @@ def get_parser_txt(rules, opts, find_odf):
             referring_rules.add(rule)
 
     for rule in rules:
-        rule_first_set = rule.get_first_set(to_first_set)
+        rule_first_set = rule.calc_first_set(to_first_set)
 
         to_first_set[rule.name] = rule_first_set
 
@@ -154,7 +159,7 @@ def get_parser_txt(rules, opts, find_odf):
             continue
 
         for referring_rule in referring_rules:
-            new_first_set = referring_rule.get_first_set(to_first_set)
+            new_first_set = referring_rule.calc_first_set(to_first_set)
 
             old_first_set = to_first_set[referring_rule.name]
 
@@ -163,10 +168,29 @@ def get_parser_txt(rules, opts, find_odf):
 
                 changed_rule_names.add(referring_rule.name)
 
+    # Follow set changed rule names
+    changed_rule_names = {x.name for x in rules}
+
+    while True:
+        while changed_rule_names:
+            rule_name = changed_rule_names.pop()
+
+            rule = to_rule[rule_name]
+
+            rule.calc_follow_set(set(), to_first_set, to_rule)
+
+        for rule in rules:
+            if rule.is_follow_set_changed:
+                rule.is_follow_set_changed = False
+
+                changed_rule_names.add(rule.name)
+
+        if not changed_rule_names:
+            break
+
     #
     rule_func_txts = []
 
-    # 4R6WO
     entry_rule_name = opts.get(SS_ENTRY_RULE, None)
 
     entry_rule = None

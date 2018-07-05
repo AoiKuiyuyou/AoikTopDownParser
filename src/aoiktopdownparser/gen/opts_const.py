@@ -26,12 +26,12 @@ GS_RULE_FUNC_NAME_POF_V_DFT = ''
 # Prefix before embedded code
 GS_CODE_PRF = 'GS_CODE_PRF'
 
-GS_CODE_PRF_V_DFT = '#```\n'
+GS_CODE_PRF_V_DFT = '# ```\n'
 
 # Postfix after embedded code
 GS_CODE_POF = 'GS_CODE_POF'
 
-GS_CODE_POF_V_DFT = '\n#```'
+GS_CODE_POF_V_DFT = '\n# ```'
 
 # `SS` below means parser template's substitution setting key.
 #

@@ -5,7 +5,6 @@ import functools
 from pprint import pformat
 import sys
 from traceback import format_exc
-from traceback import format_exception
 
 from aoikargutil import SpecViolationError
 from aoikimportutil import import_code
@@ -16,6 +15,8 @@ from ..gen.generator import get_parser_txt
 from ..gen.opts import OPTS
 from ..gen.parser import ScanError
 from ..gen.parser import parse
+from ..gen.parser import parser_debug_infos_to_msg
+from ..gen.parser import scan_error_to_msg
 from .argpsr import ensure_args_spec
 from .argpsr import parser_make
 from .argpsr_const import ARG_DEBUG_K
@@ -169,9 +170,9 @@ def main_imp(args=None):
         sys.stderr.write(msg)
 
     if exc_info is not None:
-        msg = scan_errror_to_msg(
+        msg = scan_error_to_msg(
             exc_info=exc_info,
-            exc_class=ScanError,
+            scan_error_class=ScanError,
             title='# Error\nFailed parsing rules for generating parser.',
             txt=rules_txt,
         )
@@ -340,9 +341,9 @@ def main_imp(args=None):
         msgs.append(msg)
 
     if exc_info is not None:
-        msg = scan_errror_to_msg(
+        msg = scan_error_to_msg(
             exc_info=exc_info,
-            exc_class=parser_mod.ScanError,
+            scan_error_class=parser_mod.ScanError,
             title='# Error\nGenerated parser failed parsing source data.',
             txt=src_txt,
         )
@@ -452,147 +453,3 @@ def split_uri(uri, mod_attr_sep='::'):
     info = (protocol, mod_uri, attr_chain)
 
     return info
-
-
-def parser_debug_infos_to_msg(debug_infos, txt):
-    rows = txt.split('\n')
-
-    msgs = []
-
-    for debug_info in debug_infos:
-        row_txt = rows[debug_info.row]
-
-        msg = '{indent}{err}{name}: {row}.{col}: |{txt}|{row_txt}'.format(
-            name=debug_info.name,
-            indent='    ' * debug_info.slv,
-            err='' if debug_info.sss else '!',
-            row=debug_info.row + 1,
-            col=debug_info.col + 1,
-            txt=row_txt[debug_info.col:],
-            row_txt=(
-                ', |' + row_txt[:debug_info.col] + '^' +
-                row_txt[debug_info.col:] + '|'
-            )
-            if debug_info.col != 0 else '',
-        )
-
-        msgs.append(msg)
-
-    msg = '\n'.join(msgs)
-
-    return msg
-
-
-def scan_errror_to_msg(exc_info, exc_class, title, txt):
-    msg = title
-
-    exc = exc_info[1]
-
-    if not isinstance(exc, exc_class):
-        tb_lines = format_exception(*exc_info)
-
-        tb_msg = ''.join(tb_lines)
-
-        msg += '\n---\n{}---\n'.format(tb_msg)
-
-        return msg
-
-    msgs = []
-
-    msgs.append(msg)
-
-    ctx_names = get_ctx_names(exc.ctx)
-
-    ctx_msg = ''
-
-    if ctx_names:
-        ctx_msg = ' '.join(ctx_names)
-
-    rows = txt.split('\n')
-
-    row_txt = rows[exc.row]
-
-    col_mark = ' ' * exc.col + '^'
-
-    msg = (
-        '# `{rule}` failed at {row}.{col} ({ctx_msg})\n'
-        '{row_txt}\n'
-        '{col_mark}'
-    ).format(
-        rule=exc.ctx.name,
-        row=exc.row + 1,
-        col=exc.col + 1,
-        ctx_msg=ctx_msg,
-        row_txt=row_txt,
-        col_mark=col_mark,
-    )
-
-    msgs.append(msg)
-
-    reason_exc_infos = []
-
-    if exc.eisp:
-        reason_exc_infos.extend(ei for ei in exc.eisp if ei[1] is not exc)
-
-    if exc.eis:
-        reason_exc_infos.extend(ei for ei in exc.eis if ei[1] is not exc)
-
-    if reason_exc_infos:
-        msg = 'Possible reasons:'
-
-        msgs.append(msg)
-
-        for reason_exc_info in reason_exc_infos:
-            exc = reason_exc_info[1]
-
-            ctx_names = get_ctx_names(exc.ctx)
-
-            ctx_msg = ''
-
-            if ctx_names:
-                ctx_msg = ' '.join(ctx_names)
-
-            row_txt = rows[exc.row]
-
-            col_mark = ' ' * exc.col + '^'
-
-            msg = (
-                '# `{rule}` failed at {row}.{col} ({ctx_msg})\n'
-                '{row_txt}\n'
-                '{col_mark}'
-            ).format(
-                rule=exc.ctx.name,
-                row=exc.row + 1,
-                col=exc.col + 1,
-                ctx_msg=ctx_msg,
-                row_txt=row_txt,
-                col_mark=col_mark,
-            )
-
-            msgs.append(msg)
-
-    msg = '\n\n'.join(msgs)
-
-    return msg
-
-
-def get_ctx_names(ctx):
-    ctx_names = []
-
-    ctx_name = getattr(ctx, 'name')
-
-    ctx_names.append(ctx_name)
-
-    while True:
-        ctx = getattr(ctx, 'par', None)
-
-        if ctx is None:
-            break
-
-        name = getattr(ctx, 'name')
-
-        ctx_names.append(name)
-
-    ctx_names = list(reversed(ctx_names))
-
-    return ctx_names

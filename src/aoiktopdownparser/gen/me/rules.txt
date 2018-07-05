@@ -6,6 +6,9 @@ all:
     )?
     rule_seq
     `ctx.rule_defs = rule_seq.res`
+    end
+
+end:
     '$'
 
 args_def:
@@ -106,7 +109,7 @@ rule_def:
     `ctx.res = RuleDef(name=rule_name.res, expr=or_expr.res, args=args)`
 
 rule_name:
-    r'[a-zA-Z_][a-zA-Z0-9_]*'
+    '[a-zA-Z_][a-zA-Z0-9_]*'
     `ctx.res = rule_name.rem.group()`
 
 rule_colon:
@@ -151,11 +154,36 @@ occ_expr:
 if occ_type is None:
     ctx.res = atom.res
 elif occ_type == 0:
-    ctx.res = ExprOcc01(atom.res)
+    item = atom.res
+
+    while isinstance(item, ExprOcc01):
+        item = item.item
+
+    if isinstance(item, ExprOcc0m):
+        ctx.res = item
+    elif isinstance(item, ExprOcc1m):
+        ctx.res = ExprOcc0m(item.item)
+    else:
+        ctx.res = ExprOcc01(item)
 elif occ_type == 1:
-    ctx.res = ExprOcc0m(atom.res)
+    item = atom.res
+
+    while isinstance(item, (ExprOcc01, ExprOcc0m, ExprOcc1m)):
+        item = item.item
+
+    ctx.res = ExprOcc0m(item)
 elif occ_type == 2:
-    ctx.res = ExprOcc1m(atom.res)
+    item = atom.res
+
+    while isinstance(item, ExprOcc1m):
+        item = item.item
+
+    if isinstance(item, ExprOcc01):
+        ctx.res = ExprOcc0m(item.item)
+    elif isinstance(item, ExprOcc0m):
+        ctx.res = item
+    else:
+        ctx.res = ExprOcc1m(item)
 else:
     assert 0
     ```

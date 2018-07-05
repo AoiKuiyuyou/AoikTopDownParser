@@ -15,7 +15,7 @@ class AttrDict(dict):
 
 class ScanError(Exception):
 
-    def __init__(self, ctx, txt, row, col, rep=None, eis=None, eisp=None):
+    def __init__(self, ctx, txt, row, col, reps=None, eis=None, eisp=None):
         self.ctx = ctx
 
         newline_idx = txt.find('\n')
@@ -28,12 +28,13 @@ class ScanError(Exception):
 
         self.col = col
 
-        self.rep = rep
+        # RE patterns
+        self.reps = reps
 
-        # scan exc infos of current branching
+        # Scan exception infos of current branching
         self.eis = eis
 
-        # scan exc infos of previous branching
+        # Scan exception infos of previous branching
         self.eisp = eisp
 
 
@@ -125,6 +126,8 @@ class Parser(object):
 
         self._state_stack = []
 
+        self._peeked_reos = None
+
     def _rule_func_get(self, name):
         rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
 
@@ -147,15 +150,26 @@ class Parser(object):
 
         return matched, txt
 
-    def _peek(self, reos):
+    def _peek(self, reos, is_required=False, is_branch=False):
         for reo in reos:
 
             matched = reo.match(self._txt)
 
             if matched:
-                return True
+                self._peeked_reos = None
 
-        return False
+                return reo
+
+        if is_branch:
+            self._peeked_reos.extend(reos)
+        else:
+            self._peeked_reos = reos
+
+        if is_required:
+            self._error()
+            assert 0
+        else:
+            return None
 
     def _scan_rule(self, name):
         ctx_par = self._ctx
@@ -217,7 +231,7 @@ class Parser(object):
         matched, self._txt = self._match(reo, self._txt)
 
         if matched is None:
-            self._error(rep=reo.pattern)
+            self._error(reps=[reo.pattern])
 
         if new_ctx:
             ctx = AttrDict()
@@ -246,13 +260,15 @@ class Parser(object):
 
             self._col = len(last_row_txt)
 {SS_BACKTRACKING_FUNCS}
-    def _error(self, rep=None):
+    def _error(self, reps=None):
         raise ScanError(
             ctx=self._ctx,
             txt=self._txt,
             row=self._row,
             col=self._col,
-            rep=rep,
+            reps=reps if reps else
+            [x.pattern for x in self._peeked_reos]
+            if self._peeked_reos else None,
             eis=self._scan_eis,
             eisp=self._scan_eis_prev,
         )
@@ -289,18 +305,15 @@ def parser_debug_infos_to_msg(debug_infos, txt):
     for debug_info in debug_infos:
         row_txt = rows[debug_info.row]
 
-        msg = '{indent}{err}{name}: {row}.{col}: |{txt}|{row_txt}'.format(
-            name=debug_info.name,
+        msg = '{indent}{error_sign}{name}: {row}.{col}: {txt}'.format(
             indent='    ' * debug_info.slv,
-            err='' if debug_info.sss else '!',
+            error_sign='' if debug_info.sss else '!',
+            name=debug_info.name,
             row=debug_info.row + 1,
             col=debug_info.col + 1,
-            txt=row_txt[debug_info.col:],
-            row_txt=(
-                ', |' + row_txt[:debug_info.col] + '^' +
-                row_txt[debug_info.col:] + '|'
-            )
-            if debug_info.col != 0 else '',
+            txt=repr(
+                row_txt[:debug_info.col] + '|' + row_txt[debug_info.col:]
+            ),
         )
 
         msgs.append(msg)
@@ -310,12 +323,12 @@ def parser_debug_infos_to_msg(debug_infos, txt):
     return msg
 
 
-def scan_errror_to_msg(exc_info, exc_class, title, txt):
+def scan_error_to_msg(exc_info, scan_error_class, title, txt):
     msg = title
 
     exc = exc_info[1]
 
-    if not isinstance(exc, exc_class):
+    if not isinstance(exc, scan_error_class):
         tb_lines = format_exception(*exc_info)
 
         tb_msg = ''.join(tb_lines)
@@ -342,9 +355,11 @@ def scan_errror_to_msg(exc_info, exc_class, title, txt):
     col_mark = ' ' * exc.col + '^'
 
     msg = (
-        '# `{rule}` failed at {row}.{col} ({ctx_msg})\n'
+        'Rule `{rule}` failed at {row}.{col} ({ctx_msg}):\n'
+        '```\n'
         '{row_txt}\n'
-        '{col_mark}'
+        '{col_mark}\n'
+        '```'
     ).format(
         rule=exc.ctx.name,
         row=exc.row + 1,
@@ -356,6 +371,16 @@ def scan_errror_to_msg(exc_info, exc_class, title, txt):
 
     msgs.append(msg)
 
+    if exc.reps:
+        msg = 'Failed matching {0}pattern{1}:\n{2}\n'.format(
+            'one of the ' if len(exc.reps) > 1 else '',
+            's' if len(exc.reps) > 1 else '',
+            '\n'.join(exc.reps),
+        )
+
+        msgs.append(msg)
+
+    # Messages below are for backtracking mode
     reason_exc_infos = []
 
     if exc.eisp:
@@ -384,9 +409,11 @@ def scan_errror_to_msg(exc_info, exc_class, title, txt):
             col_mark = ' ' * exc.col + '^'
 
             msg = (
-                '# `{rule}` failed at {row}.{col} ({ctx_msg})\n'
+                'Rule `{rule}` failed at {row}.{col} ({ctx_msg}):\n'
+                '```\n'
                 '{row_txt}\n'
-                '{col_mark}'
+                '{col_mark}\n'
+                '```'
             ).format(
                 rule=exc.ctx.name,
                 row=exc.row + 1,
@@ -463,9 +490,9 @@ def main(args=None):
         sys.stderr.write(msg)
 
     if exc_info is not None:
-        msg = scan_errror_to_msg(
+        msg = scan_error_to_msg(
             exc_info=exc_info,
-            exc_class=ScanError,
+            scan_error_class=ScanError,
             title='# Parsing error',
             txt=rules_txt,
         )

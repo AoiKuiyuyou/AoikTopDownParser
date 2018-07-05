@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 import re
+import sys
 
 from ..util.indent_util import add_indent
 from .opts_const import GS_BACKTRACKING_ON
@@ -29,16 +30,16 @@ EMPTY_PATTERN_INFOS = [
 ]
 
 
+class SyntaxError(Exception):
+    pass
+
+
 class AstNode(object):
 
-    def gen(self, to_reo_name, to_first_set, opts, **kwargs):
-        """
-        @param to_reo_name: Map pattern info to RE object name as parser class
-            attribute. Pattern info is a tuple of (RE_PATTERN, RE_FLAGS_STR).
+    def __init__(self):
+        self.first_set = set()
 
-        @param to_first_set: Map rule name to first set of pattern infos.
-        """
-        raise NotImplementedError()
+        self.follow_set = set()
 
     def get_pattern_infos(self):
         raise NotImplementedError()
@@ -46,7 +47,30 @@ class AstNode(object):
     def get_rule_refs(self):
         raise NotImplementedError()
 
-    def get_first_set(self, to_first_set):
+    def get_first_set(self):
+        return self.first_set
+
+    def calc_first_set(self, to_first_set):
+        raise NotImplementedError()
+
+    def get_follow_set(self):
+        return self.follow_set
+
+    def add_follow_set(self, follow_set):
+        self.follow_set.update(get_nonempty_pattern_infos(follow_set))
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        raise NotImplementedError()
+
+    def gen(self, to_reo_name, to_first_set, opts, **kwargs):
+        """
+        @param to_reo_name: Map pattern info to RE object name as parser class
+            attribute. Pattern info is a tuple of (RE_PATTERN, RE_FLAGS_STR).
+
+        @param to_first_set: Map rule name to first set of pattern infos.
+
+        @param opts: Options dict.
+        """
         raise NotImplementedError()
 
 
@@ -54,10 +78,10 @@ class Pattern(AstNode):
 
     ARG_K_FLAGS = 'flags'
 
-    def __init__(self, pat, args=None):
+    def __init__(self, pattern, args=None):
         super(Pattern, self).__init__()
 
-        self.pat = pat
+        self.pattern = pattern
 
         self.args = args if args is not None else {}
 
@@ -68,24 +92,31 @@ class Pattern(AstNode):
         # `flags_str` can be like `re.VERBOSE | re.IGNORECASE`
         self.flags = eval(self.flags_str)
 
+    def get_pattern_infos(self):
+        return {(self.pattern, self.flags_str)}
+
+    def get_rule_refs(self):
+        return set()
+
+    def calc_first_set(self, to_first_set):
+        self.first_set = {(self.pattern, self.flags_str)}
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        pass
+
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         name = kwargs.get('name', None)
 
         res = "{res_var} = self._scan_reo({reo_var})".format(
             res_var=name or '_',
-            reo_var='self.{0}'.format(to_reo_name[(self.pat, self.flags_str)]),
+            reo_var='self.{0}'.format(
+                to_reo_name[(self.pattern, self.flags_str)]
+            ),
         )
 
         return res
-
-    def get_pattern_infos(self):
-        return {(self.pat, self.flags_str)}
-
-    def get_rule_refs(self):
-        return set()
-
-    def get_first_set(self, to_first_set):
-        return {(self.pat, self.flags_str)}
 
 
 class Code(AstNode):
@@ -94,6 +125,20 @@ class Code(AstNode):
         super(Code, self).__init__()
 
         self.code = code.strip()
+
+    def get_pattern_infos(self):
+        return set()
+
+    def get_rule_refs(self):
+        return set()
+
+    def calc_first_set(self, to_first_set):
+        self.first_set = {EMPTY_PATTERN_INFO}
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        pass
 
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         res = self.code
@@ -110,15 +155,6 @@ class Code(AstNode):
 
         return res
 
-    def get_pattern_infos(self):
-        return set()
-
-    def get_rule_refs(self):
-        return set()
-
-    def get_first_set(self, to_first_set):
-        return {EMPTY_PATTERN_INFO}
-
 
 class RuleDef(AstNode):
 
@@ -130,6 +166,26 @@ class RuleDef(AstNode):
         self.args = args
 
         self.expr = expr
+
+        self.is_follow_set_changed = False
+
+    def get_pattern_infos(self):
+        return self.expr.get_pattern_infos()
+
+    def get_rule_refs(self):
+        return self.expr.get_rule_refs()
+
+    def calc_first_set(self, to_first_set):
+        self.first_set = self.expr.calc_first_set(to_first_set)
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        self.add_follow_set(follow_set)
+
+        self.expr.calc_follow_set(
+            self.get_follow_set(), to_first_set, to_rule_def
+        )
 
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         func_prf = opts.get(GS_RULE_FUNC_NAME_PRF, GS_RULE_FUNC_NAME_PRF_V_DFT)
@@ -144,6 +200,11 @@ class RuleDef(AstNode):
             func_pof=func_pof,
         )
 
+        # If the expression is a pattern or a sequence containing a single
+        # pattern and optionally codes, generate output like this:
+        # `_RULE_NAME_ = self._scan_reo(sel._REO1)`, i.e. the result variable
+        # name will be the rule name. Otherwise the result variable name will
+        # be `_` for a pattern.
         if isinstance(self.expr, Pattern):
             func_body_txt = self.expr.gen(
                 to_reo_name,
@@ -199,20 +260,50 @@ class RuleDef(AstNode):
 
         return res
 
-    def get_pattern_infos(self):
-        return self.expr.get_pattern_infos()
-
-    def get_rule_refs(self):
-        return self.expr.get_rule_refs()
-
-    def get_first_set(self, to_first_set):
-        return set(self.expr.get_first_set(to_first_set))
-
 
 class RuleRef(AstNode):
 
     def __init__(self, name):
+        super(RuleRef, self).__init__()
+
         self.name = name
+
+    def get_pattern_infos(self):
+        return set()
+
+    def get_rule_refs(self):
+        return {self.name}
+
+    def calc_first_set(self, to_first_set):
+        first_set = to_first_set.get(self.name, None)
+
+        if first_set is None:
+            msg = 'Undefined rule name: `{}`.'.format(self.name)
+
+            raise SyntaxError(msg)
+
+        self.first_set = first_set
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        rule_def = to_rule_def.get(self.name, None)
+
+        if rule_def is None:
+            msg = 'Undefined rule name: `{}`.'.format(self.name)
+
+            raise SyntaxError(msg)
+
+        if rule_def.is_follow_set_changed:
+            rule_def.add_follow_set(follow_set)
+        else:
+            old_set_count = len(rule_def.get_follow_set())
+
+            rule_def.add_follow_set(follow_set)
+
+            new_set_count = len(rule_def.get_follow_set())
+
+            rule_def.is_follow_set_changed = new_set_count != old_set_count
 
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         res = "{name} = self._scan_rule('{name}')".format(
@@ -221,34 +312,14 @@ class RuleRef(AstNode):
 
         return res
 
-    def get_pattern_infos(self):
-        return set()
-
-    def get_rule_refs(self):
-        return {self.name}
-
-    def get_first_set(self, to_first_set):
-        return to_first_set[self.name]
-
 
 class ExprSeq(AstNode):
 
     def __init__(self, items):
         super(ExprSeq, self).__init__()
 
+        assert len(items) > 1
         self.items = items
-
-    def gen(self, to_reo_name, to_first_set, opts, **kwargs):
-        txts = []
-
-        for item in self.items:
-            txt = item.gen(to_reo_name, to_first_set, opts=opts)
-
-            txts.append(txt)
-
-        res = '\n'.join(txts)
-
-        return res
 
     def get_pattern_infos(self):
         pattern_infos = set()
@@ -270,19 +341,18 @@ class ExprSeq(AstNode):
 
         return rule_refs
 
-    def get_first_set(self, to_first_set):
+    def calc_first_set(self, to_first_set):
+        for item in self.items:
+            item.calc_first_set(to_first_set)
+
         first_set = set()
 
         for item in self.items:
-            item_first_set = item.get_first_set(to_first_set)
+            item_first_set = item.get_first_set()
 
-            has_empty_pattern_info = False
-
-            for pattern_info in item_first_set:
-                if pattern_info in EMPTY_PATTERN_INFOS:
-                    has_empty_pattern_info = True
-                else:
-                    first_set.add(pattern_info)
+            has_empty_pattern_info = add_nonempty_pattern_infos(
+                first_set, item_first_set
+            )
 
             if has_empty_pattern_info:
                 continue
@@ -291,13 +361,96 @@ class ExprSeq(AstNode):
         else:
             first_set.add(EMPTY_PATTERN_INFO)
 
-        return first_set
+        self.first_set = first_set
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        self.add_follow_set(follow_set)
+
+        items_count = len(self.items)
+
+        for item_index in range(items_count):
+            item = self.items[item_index]
+
+            item_follow_set = set()
+
+            for later_item_index in range(item_index + 1, items_count):
+                later_item = self.items[later_item_index]
+
+                later_item_first_set = later_item.get_first_set()
+
+                has_empty_pattern_info = add_nonempty_pattern_infos(
+                    item_follow_set, later_item_first_set
+                )
+
+                if not has_empty_pattern_info:
+                    break
+            else:
+                item_follow_set.update(self.get_follow_set())
+
+            item.calc_follow_set(item_follow_set, to_first_set, to_rule_def)
+
+    def gen(self, to_reo_name, to_first_set, opts, **kwargs):
+        txts = []
+
+        for item in self.items:
+            txt = item.gen(to_reo_name, to_first_set, opts=opts)
+
+            txts.append(txt)
+
+        res = '\n'.join(txts)
+
+        return res
 
 
 class ExprOr(AstNode):
 
     def __init__(self, items):
+        super(ExprOr, self).__init__()
+
+        assert len(items) > 1
         self.items = items
+
+    def get_pattern_infos(self):
+        pattern_infos = set()
+
+        for item in self.items:
+            item_pattern_infos = item.get_pattern_infos()
+
+            pattern_infos.update(item_pattern_infos)
+
+        return pattern_infos
+
+    def get_rule_refs(self):
+        rule_refs = set()
+
+        for item in self.items:
+            item_rule_refs = item.get_rule_refs()
+
+            rule_refs.update(item_rule_refs)
+
+        return rule_refs
+
+    def calc_first_set(self, to_first_set):
+        first_set = set()
+
+        for item in self.items:
+            item_first_set = item.calc_first_set(to_first_set)
+
+            first_set.update(item_first_set)
+
+        self.first_set = first_set
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        self.add_follow_set(follow_set)
+
+        for item in self.items:
+            item.calc_follow_set(
+                self.get_follow_set(), to_first_set, to_rule_def
+            )
 
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         txts = []
@@ -341,58 +494,115 @@ class ExprOr(AstNode):
                   + '\nexcept Ok: self._or(1)' \
                   + '\nelse: self._or(0)'
         else:
-            for item_index, item in enumerate(self.items):
-                item_first_set = item.get_first_set(to_first_set)
+            nullable_item_infos = []
+
+            met_pattern_infos = set()
+
+            is_first_item = True
+
+            is_branches_disjoint = True
+
+            for item in self.items:
+                item_first_set = set(item.get_first_set())
+
+                is_item_nullable = False
+
+                for pattern_info in item_first_set:
+                    if pattern_info in EMPTY_PATTERN_INFOS:
+                        is_item_nullable = True
+
+                        nullable_item_infos.append((item, item_first_set))
+
+                        break
+
+                if is_item_nullable:
+                    continue
+
+                if item_first_set & met_pattern_infos:
+                    is_branches_disjoint = False
 
                 peek_args_txt = get_peek_args_txt(item_first_set, to_reo_name)
 
-                txts.append(
-                    '{0} self._peek({1}):'.format(
-                        'if' if item_index == 0 else 'elif',
-                        peek_args_txt
-                    )
+                txt = '{0} self._peek({1}{2}):'.format(
+                    'if' if is_first_item else 'elif',
+                    peek_args_txt,
+                    '' if is_first_item else ', is_branch=True',
                 )
+
+                txts.append(txt)
 
                 item_txt = item.gen(to_reo_name, to_first_set, opts=opts)
 
                 txts.append(add_indent(item_txt))
+
+                is_first_item = False
+
+                met_pattern_infos.update(item_first_set)
+
+            for item, item_first_set in nullable_item_infos:
+                union_set = set(item_first_set)
+
+                follow_set = self.get_follow_set()
+
+                union_set.update(follow_set)
+
+                union_set = get_nonempty_pattern_infos(union_set)
+
+                # This usually happens in the entry rule when the last item
+                # is empty and optional.
+                if not union_set:
+                    continue
+                else:
+                    if union_set & met_pattern_infos:
+                        is_branches_disjoint = False
+
+                peek_args_txt = get_peek_args_txt(union_set, to_reo_name)
+
+                txt = '{0} self._peek({1}{2}):'.format(
+                    'if' if is_first_item else 'elif',
+                    peek_args_txt,
+                    '' if is_first_item else ', is_branch=True',
+                )
+
+                txts.append(txt)
+
+                item_txt = item.gen(
+                    to_reo_name, to_first_set, opts=opts, is_in_expror=True
+                )
+
+                txts.append(add_indent(item_txt))
+
+                is_first_item = False
+
+                met_pattern_infos.update(union_set)
 
             txts.append('else:')
             txts.append('    self._error()')
 
             res = '\n'.join(txts)
 
+            to_print_code = False
+
+            if not is_branches_disjoint:
+                msg = 'Warning: Branches are not disjoint.\n'
+
+                sys.stderr.write(msg)
+
+                to_print_code = True
+
+            if len(nullable_item_infos) > 1:
+                msg = 'Warning: Exists multiple nullable branches.\n'
+
+                sys.stderr.write(msg)
+
+                to_print_code = True
+
+            if to_print_code:
+                msg = 'Generated code:\n```\n{}\n```\n'.format(res)
+
+                sys.stderr.write(msg)
+
         return res
-
-    def get_pattern_infos(self):
-        pattern_infos = set()
-
-        for item in self.items:
-            item_pattern_infos = item.get_pattern_infos()
-
-            pattern_infos.update(item_pattern_infos)
-
-        return pattern_infos
-
-    def get_rule_refs(self):
-        rule_refs = set()
-
-        for item in self.items:
-            item_rule_refs = item.get_rule_refs()
-
-            rule_refs.update(item_rule_refs)
-
-        return rule_refs
-
-    def get_first_set(self, to_first_set):
-        first_set = set()
-
-        for item in self.items:
-            item_first_set = item.get_first_set(to_first_set)
-
-            first_set.update(item_first_set)
-
-        return first_set
 
 
 class ExprOcc01(AstNode):
@@ -401,6 +611,30 @@ class ExprOcc01(AstNode):
         super(ExprOcc01, self).__init__()
 
         self.item = item
+
+    def get_pattern_infos(self):
+        return self.item.get_pattern_infos()
+
+    def get_rule_refs(self):
+        return self.item.get_rule_refs()
+
+    def calc_first_set(self, to_first_set):
+        item_first_set = self.item.calc_first_set(to_first_set)
+
+        first_set = set(item_first_set)
+
+        first_set.add(EMPTY_PATTERN_INFO)
+
+        self.first_set = first_set
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        self.add_follow_set(follow_set)
+
+        self.item.calc_follow_set(
+            self.get_follow_set(), to_first_set, to_rule_def
+        )
 
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         txts = []
@@ -427,34 +661,55 @@ class ExprOcc01(AstNode):
             txts.append('except Er: self._o01(0)')
             txts.append('else: self._o01(1)')
         else:
-            item_first_set = self.item.get_first_set(to_first_set)
+            is_in_expror = kwargs.get('is_in_expror', False)
+
+            if is_in_expror:
+                # The parent ExprOr item already generated the if test, so no
+                # need to generate the ExprOcc01 item's if test.
+                #
+                # Note this reduction is allowed with the requirement that the
+                # ExprOcc01 item and the child item have the same follow set,
+                # and that the parent ExprOr item will peek the first set and
+                # follow set for a nullable item such as ExprOcc01, just as an
+                # ExprOcc01 item will do.
+                #
+                item_txt = self.item.gen(
+                    to_reo_name,
+                    to_first_set,
+                    opts=opts,
+                )
+
+                return item_txt
+
+            item_first_set = self.item.get_first_set()
+
+            item_first_set = get_nonempty_pattern_infos(item_first_set)
+
+            item_txt = self.item.gen(to_reo_name, to_first_set, opts=opts)
+
+            if not item_first_set:
+                return item_txt
 
             peek_args_txt = get_peek_args_txt(item_first_set, to_reo_name)
 
-            txts.append('if self._peek({0}):'.format(peek_args_txt))
+            peek_args_txt2 = get_peek_args_txt2(
+                item_first_set, self.get_follow_set(), to_reo_name
+            )
 
-            item_txt = self.item.gen(to_reo_name, to_first_set, opts=opts)
+            txt = 'if self._peek({0}, is_required=True) {1}'.format(
+                peek_args_txt2,
+                'is self.{0}:'.format(to_reo_name[next(iter(item_first_set))])
+                if len(item_first_set) == 1
+                else 'in {0}:'.format(peek_args_txt)
+            )
+
+            txts.append(txt)
 
             txts.append(add_indent(item_txt))
 
         res = '\n'.join(txts)
 
         return res
-
-    def get_pattern_infos(self):
-        return self.item.get_pattern_infos()
-
-    def get_rule_refs(self):
-        return self.item.get_rule_refs()
-
-    def get_first_set(self, to_first_set):
-        item_first_set = self.item.get_first_set(to_first_set)
-
-        first_set = set(item_first_set)
-
-        first_set.add(EMPTY_PATTERN_INFO)
-
-        return first_set
 
 
 class ExprOcc0m(AstNode):
@@ -463,6 +718,32 @@ class ExprOcc0m(AstNode):
         super(ExprOcc0m, self).__init__()
 
         self.item = item
+
+    def get_pattern_infos(self):
+        return self.item.get_pattern_infos()
+
+    def get_rule_refs(self):
+        return self.item.get_rule_refs()
+
+    def calc_first_set(self, to_first_set):
+        item_first_set = self.item.calc_first_set(to_first_set)
+
+        first_set = set(item_first_set)
+
+        first_set.add(EMPTY_PATTERN_INFO)
+
+        self.first_set = first_set
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        self.add_follow_set(follow_set)
+
+        item_follow_set = set(self.item.get_first_set())
+
+        add_nonempty_pattern_infos(item_follow_set, self.get_follow_set())
+
+        self.item.calc_follow_set(item_follow_set, to_first_set, to_rule_def)
 
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         txts = []
@@ -491,11 +772,26 @@ class ExprOcc0m(AstNode):
             txts.append('        self._o0m(1)')
             txts.append('except Er: self._o0m(0)')
         else:
-            item_first_set = self.item.get_first_set(to_first_set)
+            item_first_set = self.item.get_first_set()
+
+            item_first_set = get_nonempty_pattern_infos(item_first_set)
 
             peek_args_txt = get_peek_args_txt(item_first_set, to_reo_name)
 
-            txts.append('while self._peek({0}):'.format(peek_args_txt))
+            peek_args_txt2 = get_peek_args_txt2(
+                item_first_set, self.get_follow_set(), to_reo_name
+            )
+
+            txt = 'while self._peek({0}, is_required=True) {1}'.format(
+                peek_args_txt2,
+                'is self.{0}:'.format(
+                    to_reo_name[next(iter(item_first_set))]
+                )
+                if len(item_first_set) == 1
+                else 'in {0}:'.format(peek_args_txt)
+            )
+
+            txts.append(txt)
 
             item_txt = self.item.gen(to_reo_name, to_first_set, opts=opts)
 
@@ -505,21 +801,6 @@ class ExprOcc0m(AstNode):
 
         return res
 
-    def get_pattern_infos(self):
-        return self.item.get_pattern_infos()
-
-    def get_rule_refs(self):
-        return self.item.get_rule_refs()
-
-    def get_first_set(self, to_first_set):
-        item_first_set = self.item.get_first_set(to_first_set)
-
-        first_set = set(item_first_set)
-
-        first_set.add(EMPTY_PATTERN_INFO)
-
-        return first_set
-
 
 class ExprOcc1m(AstNode):
 
@@ -527,6 +808,26 @@ class ExprOcc1m(AstNode):
         super(ExprOcc1m, self).__init__()
 
         self.item = item
+
+    def get_pattern_infos(self):
+        return self.item.get_pattern_infos()
+
+    def get_rule_refs(self):
+        return self.item.get_rule_refs()
+
+    def calc_first_set(self, to_first_set):
+        self.first_set = self.item.calc_first_set(to_first_set)
+
+        return self.first_set
+
+    def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
+        self.add_follow_set(follow_set)
+
+        item_follow_set = set(self.item.get_first_set())
+
+        add_nonempty_pattern_infos(item_follow_set, self.get_follow_set())
+
+        self.item.calc_follow_set(item_follow_set, to_first_set, to_rule_def)
 
     def gen(self, to_reo_name, to_first_set, opts, **kwargs):
         txts = []
@@ -555,35 +856,112 @@ class ExprOcc1m(AstNode):
             txts.append('        self._o1m(1)')
             txts.append('except Er: self._o1m(0)')
         else:
-            item_first_set = self.item.get_first_set(to_first_set)
+            item_first_set = self.item.get_first_set()
+
+            item_first_set_old_count = len(item_first_set)
+
+            item_first_set = get_nonempty_pattern_infos(item_first_set)
+
+            item_first_set_new_count = len(item_first_set)
+
+            has_empty_pattern_info = \
+                item_first_set_new_count != item_first_set_old_count
 
             peek_args_txt = get_peek_args_txt(item_first_set, to_reo_name)
 
-            txts.append('if not self._peek({0}):'.format(peek_args_txt))
-            txts.append('    self._error()')
+            peek_args_txt2 = get_peek_args_txt2(
+                item_first_set, self.get_follow_set(), to_reo_name
+            )
 
-            txts.append('while self._peek({0}):'.format(peek_args_txt))
+            if has_empty_pattern_info:
+                # Change `+` to `*`
+                txt = 'while self._peek({0}, is_required=True) {1}'.format(
+                    peek_args_txt2,
+                    'is self.{0}:'.format(
+                        to_reo_name[next(iter(item_first_set))]
+                    )
+                    if len(item_first_set) == 1
+                    else 'in {0}:'.format(peek_args_txt)
+                )
 
-            item_txt = self.item.gen(to_reo_name, to_first_set, opts=opts)
+                txts.append(txt)
 
-            txts.append(add_indent(item_txt))
+                item_txt = self.item.gen(to_reo_name, to_first_set, opts=opts)
+
+                txts.append(add_indent(item_txt))
+
+            else:
+                txts.append('while True:')
+
+                item_txt = self.item.gen(to_reo_name, to_first_set, opts=opts)
+
+                txts.append(add_indent(item_txt))
+
+                txt = '    if self._peek({0}, is_required=True) {1}'.format(
+                    peek_args_txt2,
+                    'is not self.{0}:'.format(
+                        to_reo_name[next(iter(item_first_set))]
+                    )
+                    if len(item_first_set) == 1
+                    else 'not in {0}:'.format(peek_args_txt)
+                )
+
+                txts.append(txt)
+                txts.append('        break')
 
         res = '\n'.join(txts)
 
         return res
 
-    def get_pattern_infos(self):
-        return self.item.get_pattern_infos()
 
-    def get_rule_refs(self):
-        return self.item.get_rule_refs()
+def add_nonempty_pattern_infos(to_set, from_set):
+    has_empty_pattern_info = False
 
-    def get_first_set(self, to_first_set):
-        return set(self.item.get_first_set(to_first_set))
+    for pattern_info in from_set:
+        if pattern_info in EMPTY_PATTERN_INFOS:
+            has_empty_pattern_info = True
+        else:
+            to_set.add(pattern_info)
+
+    return has_empty_pattern_info
+
+
+def get_nonempty_pattern_infos(pattern_infos):
+    nonempty_pattern_infos = set()
+
+    for pattern_info in pattern_infos:
+        if pattern_info not in EMPTY_PATTERN_INFOS:
+            nonempty_pattern_infos.add(pattern_info)
+
+    return nonempty_pattern_infos
 
 
 def get_peek_args_txt(first_set, to_reo_name):
     pattern_infos = sorted(first_set, key=(lambda x: (len(x[0]), x[0])))
+
+    reo_names = [to_reo_name[x] for x in pattern_infos]
+
+    peek_args_txt = ',\n    '.join('self.{0}'.format(x) for x in reo_names)
+
+    peek_args_txt = '[{0}]'.format(peek_args_txt)
+
+    return peek_args_txt
+
+
+def get_peek_args_txt2(first_set, follow_set, to_reo_name):
+    pattern_infos1 = sorted(first_set, key=(lambda x: (len(x[0]), x[0])))
+
+    pattern_infos2 = sorted(follow_set, key=(lambda x: (len(x[0]), x[0])))
+
+    pattern_infos = []
+
+    for pattern_info in pattern_infos1:
+        if pattern_info not in pattern_infos:
+            pattern_infos.append(pattern_info)
+
+    for pattern_info in pattern_infos2:
+        if pattern_info not in pattern_infos:
+            pattern_infos.append(pattern_info)
 
     reo_names = [to_reo_name[x] for x in pattern_infos]
 
