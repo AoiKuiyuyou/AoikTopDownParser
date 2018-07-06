@@ -14,7 +14,10 @@ setup(
 
     version='0.2.0',
 
-    description='A top-down recursive-descendent parser generator.',
+    description=(
+        'A top-down recursive descent predictive or backtracking parser'
+        ' generator.'
+    ),
 
     long_description="""`Documentation on Github
 <https://github.com/AoiKuiyuyou/AoikTopDownParser>`_""",
@@ -36,10 +39,12 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.6',
+        'Programming Language :: Python :: 3.7',
     ],
 
-    keywords='top down recursive descendent parser generator',
+    keywords=(
+        'top down recursive descent predictive backtracking parser generator'
+    ),
 
     package_dir={'': 'src'},
 
