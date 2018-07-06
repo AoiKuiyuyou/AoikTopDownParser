@@ -13,8 +13,8 @@ OPTS = {
     GS_PARSER_TPLT: get_repo_file_path('gen/parser_tplt.py'),
     SS_IMPORTS: """
 from aoiktopdownparser.gen.ast import Code
-from aoiktopdownparser.gen.ast import ExprOcc01
 from aoiktopdownparser.gen.ast import ExprOcc0m
+from aoiktopdownparser.gen.ast import ExprOcc01
 from aoiktopdownparser.gen.ast import ExprOcc1m
 from aoiktopdownparser.gen.ast import ExprOr
 from aoiktopdownparser.gen.ast import ExprSeq

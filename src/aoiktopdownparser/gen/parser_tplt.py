@@ -31,10 +31,10 @@ class ScanError(Exception):
         # RE patterns
         self.reps = reps
 
-        # Scan exception infos of current branching
+        # Scan exception infos of current branch
         self.eis = eis
 
-        # Scan exception infos of previous branching
+        # Scan exception infos of previous branch
         self.eisp = eisp
 
 
@@ -86,7 +86,6 @@ class Parser(object):
 
     # Scan is success
     _DK_SSS = 'sss'
-
 
 {SS_RULE_REOS}
 
@@ -150,15 +149,18 @@ class Parser(object):
 
         return matched, txt
 
-    def _peek(self, reos, is_required=False, is_branch=False):
-        for reo in reos:
+    def _peek(self, token_names, is_required=False, is_branch=False):
+        for token_name in token_names:
+            reo = self._TOKEN_REOS[token_name]
 
             matched = reo.match(self._txt)
 
             if matched:
                 self._peeked_reos = None
 
-                return reo
+                return token_name
+
+        reos = [self._TOKEN_REOS[x] for x in token_names]
 
         if is_branch:
             self._peeked_reos.extend(reos)
@@ -227,7 +229,9 @@ class Parser(object):
 
         return ctx_new
 
-    def _scan_reo(self, reo, new_ctx=False):
+    def _scan_token(self, token_name, new_ctx=False):
+        reo = self._TOKEN_REOS[token_name]
+
         matched, self._txt = self._match(reo, self._txt)
 
         if matched is None:
@@ -472,7 +476,7 @@ def main(args=None):
 
         sys.stderr.write(msg)
 
-        return 1
+        return 3
 
     debug_on = args_obj.debug_on
 
@@ -499,7 +503,7 @@ def main(args=None):
 
         sys.stderr.write(msg)
 
-        return 2
+        return 4
 
     msg = '# Parsing result\n{0}\n'.format(
         pformat(parsing_result, indent=4, width=1)

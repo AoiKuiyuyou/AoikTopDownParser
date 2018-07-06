@@ -106,7 +106,7 @@ rule_def:
     `args = args_def.res`
     )?
     or_expr
-    `ctx.res = RuleDef(name=rule_name.res, expr=or_expr.res, args=args)`
+    `ctx.res = RuleDef(name=rule_name.res, item=or_expr.res, args=args)`
 
 rule_name:
     '[a-zA-Z_][a-zA-Z0-9_]*'
@@ -142,7 +142,7 @@ code:
 
 occ_expr:
     occ01_group
-    `ctx.res = ExprOcc01(occ01_group.res)`
+    `ctx.res = occ01_group.res`
     |
     atom
     `occ_type = None`
@@ -192,7 +192,19 @@ occ01_group:
     sqrbrkt_beg
     or_expr
     sqrbrkt_end
-    `ctx.res = or_expr.res`
+    ```
+item = or_expr.res
+
+while isinstance(item, ExprOcc01):
+    item = item.item
+
+if isinstance(item, ExprOcc0m):
+    ctx.res = item
+elif isinstance(item, ExprOcc1m):
+    ctx.res = ExprOcc0m(item.item)
+else:
+    ctx.res = ExprOcc01(item)
+    ```
 
 sqrbrkt_beg:
     r'\['

@@ -1,13 +1,15 @@
 # coding: utf-8
 from __future__ import absolute_import
 
-from collections import OrderedDict
 import os.path
 import sys
 
 from ..util.exc_util import raise_
 from ..util.indent_util import add_indent
 from ..util.path_util import join_file_paths
+from .ast import Code
+from .ast import ExprSeq
+from .ast import Pattern
 from .opts_const import GS_BACKTRACKING_ON
 from .opts_const import GS_PARSER_TPLT
 from .opts_const import GS_PARSER_TPLT_V_DFT
@@ -99,22 +101,65 @@ def get_parser_txt(rules, opts, find_odf):
     #
     pattern_infos = set()
 
+    token_names = set()
+
+    # Map pattern info to token name
+    to_token_name = {}
+
     for rule in rules:
         rule_pattern_infos = rule.get_pattern_infos()
 
         pattern_infos.update(rule_pattern_infos)
 
-    pattern_infos = sorted(pattern_infos, key=(lambda x: (len(x[0]), x[0])))
+        signle_pattern_item = get_single_pattern(rule.item)
 
-    zfill_len = len(str(len(pattern_infos)))
+        if signle_pattern_item is not None:
+            pattern_info = next(iter(rule_pattern_infos))
 
-    # Map pattern info to RE object name as parser class attribute
-    to_reo_name = OrderedDict()
+            to_token_name[pattern_info] = rule.name
 
-    for pattern_index, pattern_info in enumerate(pattern_infos):
-        to_reo_name[pattern_info] = '_REO_{}'.format(
-            str(pattern_index + 1).zfill(zfill_len)
-        )
+            token_names.add(rule.name)
+
+    unnamed_pattern_infos = []
+
+    for pattern_info in sorted(
+        pattern_infos, key=lambda x: (len(x[0]), x[0])
+    ):
+        token_name = to_token_name.get(pattern_info, None)
+
+        if token_name is None:
+            unnamed_pattern_infos.append(pattern_info)
+
+    zfill_len = 1
+
+    is_zfill_len_found = False
+
+    while True:
+        pattern_number = 0
+
+        for pattern_info in unnamed_pattern_infos:
+            while True:
+                pattern_number += 1
+
+                token_name = '_token_{}'.format(
+                    str(pattern_number).zfill(zfill_len)
+                )
+
+                if token_name not in token_names:
+                    break
+
+            if is_zfill_len_found:
+                to_token_name[pattern_info] = token_name
+
+        if is_zfill_len_found:
+            break
+
+        new_zfill_len = len(str(pattern_number))
+
+        if new_zfill_len > zfill_len:
+            zfill_len = new_zfill_len
+        else:
+            is_zfill_len_found = True
 
     # Map rule name to rule def
     to_rule = {}
@@ -122,7 +167,7 @@ def get_parser_txt(rules, opts, find_odf):
     # Map rule name to referring rule def
     to_referring_rules = {}
 
-    # Map rule name to first set of pattern infos
+    # Map rule name to first set
     to_first_set = {}
 
     # First set changed rule names
@@ -133,13 +178,14 @@ def get_parser_txt(rules, opts, find_odf):
 
         to_first_set[rule.name] = set()
 
-        rule_refs = rule.get_rule_refs()
+        referred_rule_names = rule.get_rule_refs()
 
-        for rule_ref in rule_refs:
-            referring_rules = to_referring_rules.get(rule_ref)
+        for referred_rule_name in referred_rule_names:
+            referring_rules = to_referring_rules.get(referred_rule_name)
 
             if referring_rules is None:
-                referring_rules = to_referring_rules[rule_ref] = set()
+                referring_rules = to_referring_rules[referred_rule_name] \
+                    = set()
 
             referring_rules.add(rule)
 
@@ -201,7 +247,7 @@ def get_parser_txt(rules, opts, find_odf):
                 if rule.name == entry_rule_name:
                     entry_rule = rule
 
-        rule_func_txt = rule.gen(to_reo_name, to_first_set, opts=opts)
+        rule_func_txt = rule.gen(to_token_name, to_first_set, opts=opts)
 
         rule_func_txts.append(rule_func_txt)
 
@@ -241,22 +287,29 @@ def get_parser_txt(rules, opts, find_odf):
     #
     reo_txts = []
 
-    for pattern_info, reo_name in to_reo_name.items():
+    for pattern_info, token_name in sorted(
+        to_token_name.items(), key=(lambda x: x[1])
+    ):
         if pattern_info[1] == '0':
-            reo_txt = '{0} = re.compile({1})'.format(
-                reo_name,
+            reo_txt = '\'{0}\': re.compile({1}),'.format(
+                token_name,
                 pattern_info[0],
             )
         else:
-            reo_txt = '{0} = re.compile({1}, {2})'.format(
-                reo_name,
+            reo_txt = '\'{0}\': re.compile({1}, {2}),'.format(
+                token_name,
                 pattern_info[0],
                 pattern_info[1],
             )
 
         reo_txts.append(reo_txt)
 
-    map_ss_key_to_value[SS_RULE_REOS] = add_indent('\n'.join(reo_txts))
+    reos_txt = '_TOKEN_REOS = {{\n{0}\n}}\n'.format(
+        add_indent('\n'.join(reo_txts))
+    )
+    reos_txt = add_indent(reos_txt)
+
+    map_ss_key_to_value[SS_RULE_REOS] = reos_txt
 
     #
     backtracking_on = opts.get(GS_BACKTRACKING_ON, None) == 1
@@ -278,6 +331,33 @@ def get_parser_txt(rules, opts, find_odf):
     )
 
     return parser_txt
+
+
+def get_single_pattern(item):
+    if isinstance(item, Pattern):
+        return item
+
+    if isinstance(item, ExprSeq):
+        single_pattern_item = None
+
+        exprseq = item
+
+        for item in exprseq.items:
+            if isinstance(item, Pattern):
+                if single_pattern_item is not None:
+                    single_pattern_item = None
+
+                    break
+                else:
+                    single_pattern_item = item
+            elif not isinstance(item, Code):
+                single_pattern_item = None
+
+                break
+
+        return single_pattern_item
+
+    return None
 
 
 def replace_ss_keys(txt, spec, find_odf):

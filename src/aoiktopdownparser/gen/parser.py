@@ -7,8 +7,8 @@ import sys
 from traceback import format_exception
 
 from aoiktopdownparser.gen.ast import Code
-from aoiktopdownparser.gen.ast import ExprOcc01
 from aoiktopdownparser.gen.ast import ExprOcc0m
+from aoiktopdownparser.gen.ast import ExprOcc01
 from aoiktopdownparser.gen.ast import ExprOcc1m
 from aoiktopdownparser.gen.ast import ExprOr
 from aoiktopdownparser.gen.ast import ExprSeq
@@ -40,10 +40,10 @@ class ScanError(Exception):
         # RE patterns
         self.reps = reps
 
-        # Scan exception infos of current branching
+        # Scan exception infos of current branch
         self.eis = eis
 
-        # Scan exception infos of previous branching
+        # Scan exception infos of previous branch
         self.eisp = eisp
 
 
@@ -96,33 +96,34 @@ class Parser(object):
     # Scan is success
     _DK_SSS = 'sss'
 
-
-    _REO_01 = re.compile('$')
-    _REO_02 = re.compile('@')
-    _REO_03 = re.compile('[(]')
-    _REO_04 = re.compile('[)]')
-    _REO_05 = re.compile('[*]')
-    _REO_06 = re.compile('[+]')
-    _REO_07 = re.compile('[,]')
-    _REO_08 = re.compile('[:]')
-    _REO_09 = re.compile('[=]')
-    _REO_10 = re.compile('[?]')
-    _REO_11 = re.compile('[|]')
-    _REO_12 = re.compile(r'\[')
-    _REO_13 = re.compile(r'\]')
-    _REO_14 = re.compile(r'(`+)((?:.|\n)*?)\1')
-    _REO_15 = re.compile('None(?![a-zA-Z0-9_])')
-    _REO_16 = re.compile('[a-zA-Z_][a-zA-Z0-9_]*')
-    _REO_17 = re.compile('(True|False)(?![a-zA-Z0-9_])')
-    _REO_18 = re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)')
-    _REO_19 = re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])')
-    _REO_20 = re.compile(r"""
-    ([-+])?         # Sign
-    (?=\d|[.]\d)    # Next is an integer part or a fraction part
-    (\d*)           # Integer part
-    ([.]\d*)?       # Fraction part
-    (e[-+]?\d+)?    # Exponent part
-    """, re.VERBOSE | re.IGNORECASE)
+    _TOKEN_REOS = {
+        'arg_kvsep': re.compile('[=]'),
+        'arg_sep': re.compile('[,]'),
+        'args_sign': re.compile('@'),
+        'brkt_beg': re.compile('[(]'),
+        'brkt_end': re.compile('[)]'),
+        'code': re.compile(r'(`+)((?:.|\n)*?)\1'),
+        'end': re.compile('$'),
+        'lit_bool': re.compile('(True|False)(?![a-zA-Z0-9_])'),
+        'lit_none': re.compile('None(?![a-zA-Z0-9_])'),
+        'lit_num': re.compile(r"""
+        ([-+])?         # Sign
+        (?=\d|[.]\d)    # Next is an integer part or a fraction part
+        (\d*)           # Integer part
+        ([.]\d*)?       # Fraction part
+        (e[-+]?\d+)?    # Exponent part
+        """, re.VERBOSE | re.IGNORECASE),
+        'occ01_trailer': re.compile('[?]'),
+        'occ0m_trailer': re.compile('[*]'),
+        'occ1m_trailer': re.compile('[+]'),
+        'or_expr_op': re.compile('[|]'),
+        'regex_str': re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'),
+        'rule_colon': re.compile('[:]'),
+        'rule_name': re.compile('[a-zA-Z_][a-zA-Z0-9_]*'),
+        'rule_ref': re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])'),
+        'sqrbrkt_beg': re.compile(r'\['),
+        'sqrbrkt_end': re.compile(r'\]'),
+    }
 
     def __init__(self, txt, debug=False):
         self._txt = txt
@@ -184,15 +185,18 @@ class Parser(object):
 
         return matched, txt
 
-    def _peek(self, reos, is_required=False, is_branch=False):
-        for reo in reos:
+    def _peek(self, token_names, is_required=False, is_branch=False):
+        for token_name in token_names:
+            reo = self._TOKEN_REOS[token_name]
 
             matched = reo.match(self._txt)
 
             if matched:
                 self._peeked_reos = None
 
-                return reo
+                return token_name
+
+        reos = [self._TOKEN_REOS[x] for x in token_names]
 
         if is_branch:
             self._peeked_reos.extend(reos)
@@ -261,7 +265,9 @@ class Parser(object):
 
         return ctx_new
 
-    def _scan_reo(self, reo, new_ctx=False):
+    def _scan_token(self, token_name, new_ctx=False):
+        reo = self._TOKEN_REOS[token_name]
+
         matched, self._txt = self._match(reo, self._txt)
 
         if matched is None:
@@ -311,8 +317,10 @@ class Parser(object):
         # ```
         ctx.opts = None
         # ```
-        if self._peek([self._REO_02,
-            self._REO_16], is_required=True) is self._REO_02:
+        if self._peek([
+            'args_sign',
+            'rule_name'],
+            is_required=True) == 'args_sign':
             args_def = self._scan_rule('args_def')
             # ```
             ctx.opts = args_def.res
@@ -324,7 +332,7 @@ class Parser(object):
         end = self._scan_rule('end')
     
     def end(self, ctx):
-        end = self._scan_reo(self._REO_01)
+        end = self._scan_token('end')
     
     def args_def(self, ctx):
         args_sign = self._scan_rule('args_sign')
@@ -340,22 +348,22 @@ class Parser(object):
         # ```
     
     def args_sign(self, ctx):
-        args_sign = self._scan_reo(self._REO_02)
+        args_sign = self._scan_token('args_sign')
     
     def args_group(self, ctx):
         brkt_beg = self._scan_rule('brkt_beg')
-        if self._peek([self._REO_04]):
+        if self._peek(['brkt_end']):
             brkt_end = self._scan_rule('brkt_end')
-        elif self._peek([self._REO_16], is_branch=True):
+        elif self._peek(['rule_name'], is_branch=True):
             arg_item = self._scan_rule('arg_item')
         else:
             self._error()
     
     def brkt_beg(self, ctx):
-        brkt_beg = self._scan_reo(self._REO_03)
+        brkt_beg = self._scan_token('brkt_beg')
     
     def brkt_end(self, ctx):
-        brkt_end = self._scan_reo(self._REO_04)
+        brkt_end = self._scan_token('brkt_end')
     
     def arg_item(self, ctx):
         arg_expr = self._scan_rule('arg_expr')
@@ -363,13 +371,13 @@ class Parser(object):
         ctx.res = arg_expr.res
         ctx.par.arg_item = ctx
         # ```
-        if self._peek([self._REO_04]):
+        if self._peek(['brkt_end']):
             brkt_end = self._scan_rule('brkt_end')
-        elif self._peek([self._REO_07], is_branch=True):
+        elif self._peek(['arg_sep'], is_branch=True):
             arg_sep = self._scan_rule('arg_sep')
-            if self._peek([self._REO_04]):
+            if self._peek(['brkt_end']):
                 brkt_end = self._scan_rule('brkt_end')
-            elif self._peek([self._REO_16], is_branch=True):
+            elif self._peek(['rule_name'], is_branch=True):
                 arg_item = self._scan_rule('arg_item')
             else:
                 self._error()
@@ -385,13 +393,13 @@ class Parser(object):
         # ```
     
     def arg_key(self, ctx):
-        arg_key = self._scan_reo(self._REO_16)
+        arg_key = self._scan_token('rule_name')
         # ```
         ctx.res = arg_key.rem.group()
         # ```
     
     def arg_kvsep(self, ctx):
-        arg_kvsep = self._scan_reo(self._REO_09)
+        arg_kvsep = self._scan_token('arg_kvsep')
     
     def arg_val(self, ctx):
         lit_val = self._scan_rule('lit_val')
@@ -400,22 +408,22 @@ class Parser(object):
         # ```
     
     def lit_val(self, ctx):
-        if self._peek([self._REO_18]):
+        if self._peek(['regex_str']):
             lit_str = self._scan_rule('lit_str')
             # ```
             ctx.res = lit_str.res
             # ```
-        elif self._peek([self._REO_20], is_branch=True):
+        elif self._peek(['lit_num'], is_branch=True):
             lit_num = self._scan_rule('lit_num')
             # ```
             ctx.res = lit_num.res
             # ```
-        elif self._peek([self._REO_17], is_branch=True):
+        elif self._peek(['lit_bool'], is_branch=True):
             lit_bool = self._scan_rule('lit_bool')
             # ```
             ctx.res = lit_bool.res
             # ```
-        elif self._peek([self._REO_15], is_branch=True):
+        elif self._peek(['lit_none'], is_branch=True):
             lit_none = self._scan_rule('lit_none')
             # ```
             ctx.res = lit_none.res
@@ -424,31 +432,31 @@ class Parser(object):
             self._error()
     
     def lit_str(self, ctx):
-        lit_str = self._scan_reo(self._REO_18)
+        lit_str = self._scan_token('regex_str')
         # ```
         ctx.res = eval(lit_str.rem.group())
         # ```
     
     def lit_num(self, ctx):
-        lit_num = self._scan_reo(self._REO_20)
+        lit_num = self._scan_token('lit_num')
         # ```
         ctx.res = eval(lit_num.rem.group())
         # ```
     
     def lit_bool(self, ctx):
-        lit_bool = self._scan_reo(self._REO_17)
+        lit_bool = self._scan_token('lit_bool')
         # ```
         ctx.res = True if (lit_bool.rem.group() == 'True') else False
         # ```
     
     def lit_none(self, ctx):
-        lit_none = self._scan_reo(self._REO_15)
+        lit_none = self._scan_token('lit_none')
         # ```
         ctx.res = None
         # ```
     
     def arg_sep(self, ctx):
-        arg_sep = self._scan_reo(self._REO_07)
+        arg_sep = self._scan_token('arg_sep')
     
     def rule_seq(self, ctx):
         # ```
@@ -459,8 +467,10 @@ class Parser(object):
             # ```
             ctx.res.append(rule_def.res)
             # ```
-            if self._peek([self._REO_16,
-            self._REO_01], is_required=True) is not self._REO_16:
+            if self._peek([
+                'rule_name',
+                'end'],
+                is_required=True) != 'rule_name':
                 break
     
     def rule_def(self, ctx):
@@ -469,40 +479,44 @@ class Parser(object):
         # ```
         args = None
         # ```
-        if self._peek([self._REO_02,
-            self._REO_03,
-            self._REO_12,
-            self._REO_14,
-            self._REO_18,
-            self._REO_19], is_required=True) is self._REO_02:
+        if self._peek([
+            'args_sign',
+            'rule_ref',
+            'regex_str',
+            'code',
+            'brkt_beg',
+            'sqrbrkt_beg'],
+            is_required=True) == 'args_sign':
             args_def = self._scan_rule('args_def')
             # ```
             args = args_def.res
             # ```
         or_expr = self._scan_rule('or_expr')
         # ```
-        ctx.res = RuleDef(name=rule_name.res, expr=or_expr.res, args=args)
+        ctx.res = RuleDef(name=rule_name.res, item=or_expr.res, args=args)
         # ```
     
     def rule_name(self, ctx):
-        rule_name = self._scan_reo(self._REO_16)
+        rule_name = self._scan_token('rule_name')
         # ```
         ctx.res = rule_name.rem.group()
         # ```
     
     def rule_colon(self, ctx):
-        rule_colon = self._scan_reo(self._REO_08)
+        rule_colon = self._scan_token('rule_colon')
     
     def or_expr(self, ctx):
         seq_expr = self._scan_rule('seq_expr')
         # ```
         items = [seq_expr.res]
         # ```
-        while self._peek([self._REO_11,
-            self._REO_01,
-            self._REO_04,
-            self._REO_13,
-            self._REO_16], is_required=True) is self._REO_11:
+        while self._peek([
+            'or_expr_op',
+            'rule_name',
+            'brkt_end',
+            'sqrbrkt_end',
+            'end'],
+            is_required=True) == 'or_expr_op':
             or_expr_op = self._scan_rule('or_expr_op')
             seq_expr = self._scan_rule('seq_expr')
             # ```
@@ -513,18 +527,20 @@ class Parser(object):
         # ```
     
     def or_expr_op(self, ctx):
-        or_expr_op = self._scan_reo(self._REO_11)
+        or_expr_op = self._scan_token('or_expr_op')
     
     def seq_expr(self, ctx):
         # ```
         items = []
         # ```
         while True:
-            while self._peek([self._REO_14,
-                self._REO_03,
-                self._REO_12,
-                self._REO_18,
-                self._REO_19], is_required=True) is self._REO_14:
+            while self._peek([
+                'code',
+                'rule_ref',
+                'regex_str',
+                'brkt_beg',
+                'sqrbrkt_beg'],
+                is_required=True) == 'code':
                 code = self._scan_rule('code')
                 # ```
                 items.append(code.res)
@@ -533,84 +549,93 @@ class Parser(object):
             # ```
             items.append(occ_expr.res)
             # ```
-            while self._peek([self._REO_14,
-                self._REO_01,
-                self._REO_03,
-                self._REO_04,
-                self._REO_11,
-                self._REO_12,
-                self._REO_13,
-                self._REO_16,
-                self._REO_18,
-                self._REO_19], is_required=True) is self._REO_14:
+            while self._peek([
+                'code',
+                'rule_ref',
+                'regex_str',
+                'rule_name',
+                'brkt_beg',
+                'brkt_end',
+                'or_expr_op',
+                'sqrbrkt_beg',
+                'sqrbrkt_end',
+                'end'],
+                is_required=True) == 'code':
                 code = self._scan_rule('code')
                 # ```
                 items.append(code.res)
                 # ```
-            if self._peek([self._REO_03,
-            self._REO_12,
-            self._REO_14,
-            self._REO_18,
-            self._REO_19,
-            self._REO_01,
-            self._REO_04,
-            self._REO_11,
-            self._REO_13,
-            self._REO_16], is_required=True) not in [self._REO_03,
-            self._REO_12,
-            self._REO_14,
-            self._REO_18,
-            self._REO_19]:
+            if self._peek([
+                'rule_ref',
+                'regex_str',
+                'code',
+                'brkt_beg',
+                'sqrbrkt_beg',
+                'rule_name',
+                'brkt_end',
+                'or_expr_op',
+                'sqrbrkt_end',
+                'end'],
+                is_required=True) not in [
+                'rule_ref',
+                'regex_str',
+                'code',
+                'brkt_beg',
+                'sqrbrkt_beg']:
                 break
         # ```
         ctx.res = ExprSeq(items) if len(items) > 1 else items[0]
         # ```
     
     def code(self, ctx):
-        code = self._scan_reo(self._REO_14)
+        code = self._scan_token('code')
         # ```
         ctx.res = Code(code.rem.group(2))
         # ```
     
     def occ_expr(self, ctx):
-        if self._peek([self._REO_12]):
+        if self._peek(['sqrbrkt_beg']):
             occ01_group = self._scan_rule('occ01_group')
             # ```
-            ctx.res = ExprOcc01(occ01_group.res)
+            ctx.res = occ01_group.res
             # ```
-        elif self._peek([self._REO_03,
-            self._REO_18,
-            self._REO_19], is_branch=True):
+        elif self._peek([
+            'rule_ref',
+            'regex_str',
+            'brkt_beg'], is_branch=True):
             atom = self._scan_rule('atom')
             # ```
             occ_type = None
             # ```
-            if self._peek([self._REO_05,
-                self._REO_06,
-                self._REO_10,
-                self._REO_01,
-                self._REO_03,
-                self._REO_04,
-                self._REO_11,
-                self._REO_12,
-                self._REO_13,
-                self._REO_14,
-                self._REO_16,
-                self._REO_18,
-                self._REO_19], is_required=True) in [self._REO_05,
-                self._REO_06,
-                self._REO_10]:
-                if self._peek([self._REO_10]):
+            if self._peek([
+                'occ0m_trailer',
+                'occ1m_trailer',
+                'occ01_trailer',
+                'rule_ref',
+                'regex_str',
+                'rule_name',
+                'code',
+                'brkt_beg',
+                'brkt_end',
+                'or_expr_op',
+                'sqrbrkt_beg',
+                'sqrbrkt_end',
+                'end'],
+                is_required=True) in [
+                'occ0m_trailer',
+                'occ1m_trailer',
+                'occ01_trailer']:
+                if self._peek(['occ01_trailer']):
                     occ01_trailer = self._scan_rule('occ01_trailer')
                     # ```
                     occ_type = 0
                     # ```
-                elif self._peek([self._REO_05], is_branch=True):
+                elif self._peek(['occ0m_trailer'], is_branch=True):
                     occ0m_trailer = self._scan_rule('occ0m_trailer')
                     # ```
                     occ_type = 1
                     # ```
-                elif self._peek([self._REO_06], is_branch=True):
+                elif self._peek(['occ1m_trailer'], is_branch=True):
                     occ1m_trailer = self._scan_rule('occ1m_trailer')
                     # ```
                     occ_type = 2
@@ -662,44 +687,56 @@ class Parser(object):
         or_expr = self._scan_rule('or_expr')
         sqrbrkt_end = self._scan_rule('sqrbrkt_end')
         # ```
-        ctx.res = or_expr.res
+        item = or_expr.res
+        
+        while isinstance(item, ExprOcc01):
+            item = item.item
+        
+        if isinstance(item, ExprOcc0m):
+            ctx.res = item
+        elif isinstance(item, ExprOcc1m):
+            ctx.res = ExprOcc0m(item.item)
+        else:
+            ctx.res = ExprOcc01(item)
         # ```
     
     def sqrbrkt_beg(self, ctx):
-        sqrbrkt_beg = self._scan_reo(self._REO_12)
+        sqrbrkt_beg = self._scan_token('sqrbrkt_beg')
     
     def sqrbrkt_end(self, ctx):
-        sqrbrkt_end = self._scan_reo(self._REO_13)
+        sqrbrkt_end = self._scan_token('sqrbrkt_end')
     
     def occ01_trailer(self, ctx):
-        occ01_trailer = self._scan_reo(self._REO_10)
+        occ01_trailer = self._scan_token('occ01_trailer')
     
     def occ0m_trailer(self, ctx):
-        occ0m_trailer = self._scan_reo(self._REO_05)
+        occ0m_trailer = self._scan_token('occ0m_trailer')
     
     def occ1m_trailer(self, ctx):
-        occ1m_trailer = self._scan_reo(self._REO_06)
+        occ1m_trailer = self._scan_token('occ1m_trailer')
     
     def atom(self, ctx):
-        if self._peek([self._REO_18]):
+        if self._peek(['regex_str']):
             regex_str = self._scan_rule('regex_str')
             # ```
             args = None
             # ```
-            if self._peek([self._REO_02,
-                self._REO_01,
-                self._REO_03,
-                self._REO_04,
-                self._REO_05,
-                self._REO_06,
-                self._REO_10,
-                self._REO_11,
-                self._REO_12,
-                self._REO_13,
-                self._REO_14,
-                self._REO_16,
-                self._REO_18,
-                self._REO_19], is_required=True) is self._REO_02:
+            if self._peek([
+                'args_sign',
+                'rule_ref',
+                'regex_str',
+                'rule_name',
+                'code',
+                'brkt_beg',
+                'brkt_end',
+                'occ0m_trailer',
+                'occ1m_trailer',
+                'occ01_trailer',
+                'or_expr_op',
+                'sqrbrkt_beg',
+                'sqrbrkt_end',
+                'end'],
+                is_required=True) == 'args_sign':
                 args_def = self._scan_rule('args_def')
                 # ```
                 args = args_def.res
@@ -707,12 +744,12 @@ class Parser(object):
             # ```
             ctx.res = Pattern(regex_str.res, args=args)
             # ```
-        elif self._peek([self._REO_19], is_branch=True):
+        elif self._peek(['rule_ref'], is_branch=True):
             rule_ref = self._scan_rule('rule_ref')
             # ```
             ctx.res = rule_ref.res
             # ```
-        elif self._peek([self._REO_03], is_branch=True):
+        elif self._peek(['brkt_beg'], is_branch=True):
             group = self._scan_rule('group')
             # ```
             ctx.res = group.res
@@ -721,13 +758,13 @@ class Parser(object):
             self._error()
     
     def regex_str(self, ctx):
-        regex_str = self._scan_reo(self._REO_18)
+        regex_str = self._scan_token('regex_str')
         # ```
         ctx.res = regex_str.rem.group()
         # ```
     
     def rule_ref(self, ctx):
-        rule_ref = self._scan_reo(self._REO_19)
+        rule_ref = self._scan_token('rule_ref')
         # ```
         name = rule_ref.rem.group(1)
         ctx.res = RuleRef(name)
@@ -938,7 +975,7 @@ def main(args=None):
 
         sys.stderr.write(msg)
 
-        return 1
+        return 3
 
     debug_on = args_obj.debug_on
 
@@ -965,7 +1002,7 @@ def main(args=None):
 
         sys.stderr.write(msg)
 
-        return 2
+        return 4
 
     msg = '# Parsing result\n{0}\n'.format(
         pformat(parsing_result, indent=4, width=1)
