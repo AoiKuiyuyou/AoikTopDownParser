@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import absolute_import
 
+from argparse import ArgumentParser
 from pprint import pformat
 import re
 import sys
@@ -15,7 +16,9 @@ class AttrDict(dict):
 
 class ScanError(Exception):
 
-    def __init__(self, ctx, txt, row, col, reps=None, eis=None, eisp=None):
+    def __init__(
+        self, ctx, txt, pos, row, col, reps=None, eis=None, eisp=None
+    ):
         self.ctx = ctx
 
         newline_idx = txt.find('\n')
@@ -23,6 +26,8 @@ class ScanError(Exception):
             self.txt = txt[:newline_idx]
         else:
             self.txt = txt
+
+        self.pos = pos
 
         self.row = row
 
@@ -38,14 +43,9 @@ class ScanError(Exception):
         self.eisp = eisp
 
 
-Er = ScanError
-
-
+# Used in backtracking mode.
 class ScanOk(Exception):
     pass
-
-
-Ok = ScanOk
 
 
 class Parser(object):
@@ -75,6 +75,9 @@ class Parser(object):
     # Text to parse
     _DK_TXT = 'txt'
 
+    # Position number (0-based)
+    _DK_POS = 'pos'
+
     # Row number (0-based)
     _DK_ROW = 'row'
 
@@ -91,6 +94,8 @@ class Parser(object):
 
     def __init__(self, txt, debug=False):
         self._txt = txt
+
+        self._pos = 0
 
         self._row = 0
 
@@ -127,33 +132,11 @@ class Parser(object):
 
         self._peeked_reos = None
 
-    def _rule_func_get(self, name):
-        rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
-
-        rule_func = getattr(self, rule_func_name)
-
-        return rule_func
-
-    def _match(self, reo, txt):
-        matched = reo.match(txt)
-
-        if matched:
-            matched_len = len(matched.group())
-
-            if matched_len > 0:
-                matched_txt = txt[:matched_len]
-
-                self._update_state(matched_txt)
-
-                txt = txt[matched_len:]
-
-        return matched, txt
-
     def _peek(self, token_names, is_required=False, is_branch=False):
         for token_name in token_names:
             reo = self._TOKEN_REOS[token_name]
 
-            matched = reo.match(self._txt)
+            matched = reo.match(self._txt, self._pos)
 
             if matched:
                 self._peeked_reos = None
@@ -169,9 +152,29 @@ class Parser(object):
 
         if is_required:
             self._error()
-            assert 0
         else:
             return None
+
+    def _scan_token(self, token_name, new_ctx=False):
+        reo = self._TOKEN_REOS[token_name]
+
+        matched = self._match(reo)
+
+        if matched is None:
+            self._error(reps=[reo.pattern])
+
+        if new_ctx:
+            ctx = AttrDict()
+
+            ctx.name = ''
+
+            ctx.par = self._ctx
+        else:
+            ctx = self._ctx
+
+        ctx.rem = matched
+
+        return ctx
 
     def _scan_rule(self, name):
         ctx_par = self._ctx
@@ -179,7 +182,7 @@ class Parser(object):
         self._scan_lv += 1
 
         if self._ws_reo:
-            _, self._txt = self._match(self._ws_reo, self._txt)
+            self._match(self._ws_reo)
 
         ctx_new = AttrDict()
 
@@ -198,6 +201,7 @@ class Parser(object):
             debug_info = AttrDict()
             debug_info[self._DK_NAME] = name
             debug_info[self._DK_TXT] = self._txt
+            debug_info[self._DK_POS] = self._pos
             debug_info[self._DK_ROW] = self._row
             debug_info[self._DK_COL] = self._col
             debug_info[self._DK_SLV] = self._scan_lv
@@ -225,30 +229,24 @@ class Parser(object):
             self._ctx = ctx_par
 
         if self._ws_reo:
-            _, self._txt = self._match(self._ws_reo, self._txt)
+            self._match(self._ws_reo)
 
         return ctx_new
 
-    def _scan_token(self, token_name, new_ctx=False):
-        reo = self._TOKEN_REOS[token_name]
+    def _match(self, reo):
+        matched = reo.match(self._txt, self._pos)
 
-        matched, self._txt = self._match(reo, self._txt)
+        if matched:
+            matched_txt = matched.group()
 
-        if matched is None:
-            self._error(reps=[reo.pattern])
+            matched_len = len(matched_txt)
 
-        if new_ctx:
-            ctx = AttrDict()
+            if matched_len > 0:
+                self._pos += matched_len
 
-            ctx.name = ''
+                self._update_state(matched_txt)
 
-            ctx.par = self._ctx
-        else:
-            ctx = self._ctx
-
-        ctx.rem = matched
-
-        return ctx
+        return matched
 
     def _update_state(self, matched_txt):
         row_cnt = matched_txt.count('\n')
@@ -263,11 +261,19 @@ class Parser(object):
             self._row += row_cnt
 
             self._col = len(last_row_txt)
+
+    def _rule_func_get(self, name):
+        rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
+
+        rule_func = getattr(self, rule_func_name)
+
+        return rule_func
 {SS_BACKTRACKING_FUNCS}
     def _error(self, reps=None):
         raise ScanError(
             ctx=self._ctx,
             txt=self._txt,
+            pos=self._pos,
             row=self._row,
             col=self._col,
             reps=reps if reps else
@@ -309,12 +315,13 @@ def parser_debug_infos_to_msg(debug_infos, txt):
     for debug_info in debug_infos:
         row_txt = rows[debug_info.row]
 
-        msg = '{indent}{error_sign}{name}: {row}.{col}: {txt}'.format(
+        msg = '{indent}{error_sign}{name}: {row}.{col} ({pos}): {txt}'.format(
             indent='    ' * debug_info.slv,
             error_sign='' if debug_info.sss else '!',
             name=debug_info.name,
             row=debug_info.row + 1,
             col=debug_info.col + 1,
+            pos=debug_info.pos + 1,
             txt=repr(
                 row_txt[:debug_info.col] + '|' + row_txt[debug_info.col:]
             ),
@@ -359,7 +366,8 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
     col_mark = ' ' * exc.col + '^'
 
     msg = (
-        'Rule `{rule}` failed at {row}.{col} ({ctx_msg}):\n'
+        'Rule `{rule}` failed at {row}.{col} ({pos})'
+        ' (ctx: {ctx_msg}):\n'
         '```\n'
         '{row_txt}\n'
         '{col_mark}\n'
@@ -368,6 +376,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
         rule=exc.ctx.name,
         row=exc.row + 1,
         col=exc.col + 1,
+        pos=exc.pos + 1,
         ctx_msg=ctx_msg,
         row_txt=row_txt,
         col_mark=col_mark,
@@ -377,7 +386,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
 
     if exc.reps:
         msg = 'Failed matching {0}pattern{1}:\n{2}\n'.format(
-            'one of the ' if len(exc.reps) > 1 else '',
+            'one of the ' if len(exc.reps) > 1 else 'the ',
             's' if len(exc.reps) > 1 else '',
             '\n'.join(exc.reps),
         )
@@ -413,7 +422,8 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
             col_mark = ' ' * exc.col + '^'
 
             msg = (
-                'Rule `{rule}` failed at {row}.{col} ({ctx_msg}):\n'
+                'Rule `{rule}` failed at {row}.{col} ({pos})'
+                ' (ctx: {ctx_msg}):\n'
                 '```\n'
                 '{row_txt}\n'
                 '{col_mark}\n'
@@ -422,6 +432,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
                 rule=exc.ctx.name,
                 row=exc.row + 1,
                 col=exc.col + 1,
+                pos=exc.pos + 1,
                 ctx_msg=ctx_msg,
                 row_txt=row_txt,
                 col_mark=col_mark,
@@ -457,22 +468,24 @@ def get_ctx_names(ctx):
 
 
 def main(args=None):
-    from argparse import ArgumentParser
-
     args_parser = ArgumentParser()
 
-    args_parser.add_argument('-f', dest='input_file_path', required=True)
+    args_parser.add_argument(
+        '-s', dest='source_file_path', required=True, help='Source file path.'
+    )
 
-    args_parser.add_argument('-d', dest='debug_on', action='store_true')
+    args_parser.add_argument(
+        '-d', dest='debug_on', action='store_true', help='Debug message on.'
+    )
 
     args_obj = args_parser.parse_args(args)
 
-    input_file_path = args_obj.input_file_path
+    source_file_path = args_obj.source_file_path
 
     try:
-        rules_txt = open(input_file_path).read()
+        rules_txt = open(source_file_path).read()
     except Exception:
-        msg = 'Failed reading input file: `{0}`\n'.format(input_file_path)
+        msg = 'Failed reading source file: `{0}`\n'.format(source_file_path)
 
         sys.stderr.write(msg)
 

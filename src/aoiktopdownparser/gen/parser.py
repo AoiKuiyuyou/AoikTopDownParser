@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import absolute_import
 
+from argparse import ArgumentParser
 from pprint import pformat
 import re
 import sys
@@ -24,7 +25,9 @@ class AttrDict(dict):
 
 class ScanError(Exception):
 
-    def __init__(self, ctx, txt, row, col, reps=None, eis=None, eisp=None):
+    def __init__(
+        self, ctx, txt, pos, row, col, reps=None, eis=None, eisp=None
+    ):
         self.ctx = ctx
 
         newline_idx = txt.find('\n')
@@ -32,6 +35,8 @@ class ScanError(Exception):
             self.txt = txt[:newline_idx]
         else:
             self.txt = txt
+
+        self.pos = pos
 
         self.row = row
 
@@ -47,14 +52,9 @@ class ScanError(Exception):
         self.eisp = eisp
 
 
-Er = ScanError
-
-
+# Used in backtracking mode.
 class ScanOk(Exception):
     pass
-
-
-Ok = ScanOk
 
 
 class Parser(object):
@@ -84,6 +84,9 @@ class Parser(object):
     # Text to parse
     _DK_TXT = 'txt'
 
+    # Position number (0-based)
+    _DK_POS = 'pos'
+
     # Row number (0-based)
     _DK_ROW = 'row'
 
@@ -97,11 +100,11 @@ class Parser(object):
     _DK_SSS = 'sss'
 
     _TOKEN_REOS = {
-        'arg_kvsep': re.compile('[=]'),
-        'arg_sep': re.compile('[,]'),
+        'arg_kvsep': re.compile('='),
+        'arg_sep': re.compile(','),
         'args_sign': re.compile('@'),
-        'brkt_beg': re.compile('[(]'),
-        'brkt_end': re.compile('[)]'),
+        'brkt_beg': re.compile(r'\('),
+        'brkt_end': re.compile(r'\)'),
         'code': re.compile(r'(`+)((?:.|\n)*?)\1'),
         'end': re.compile('$'),
         'lit_bool': re.compile('(True|False)(?![a-zA-Z0-9_])'),
@@ -113,12 +116,12 @@ class Parser(object):
         ([.]\d*)?       # Fraction part
         (e[-+]?\d+)?    # Exponent part
         """, re.VERBOSE | re.IGNORECASE),
-        'occ01_trailer': re.compile('[?]'),
-        'occ0m_trailer': re.compile('[*]'),
-        'occ1m_trailer': re.compile('[+]'),
-        'or_expr_op': re.compile('[|]'),
+        'occ01_trailer': re.compile(r'\?'),
+        'occ0m_trailer': re.compile(r'\*'),
+        'occ1m_trailer': re.compile(r'\+'),
+        'or_expr_op': re.compile(r'\|'),
         'regex_str': re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'),
-        'rule_colon': re.compile('[:]'),
+        'rule_colon': re.compile(':'),
         'rule_name': re.compile('[a-zA-Z_][a-zA-Z0-9_]*'),
         'rule_ref': re.compile(r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])'),
         'sqrbrkt_beg': re.compile(r'\['),
@@ -127,6 +130,8 @@ class Parser(object):
 
     def __init__(self, txt, debug=False):
         self._txt = txt
+
+        self._pos = 0
 
         self._row = 0
 
@@ -163,33 +168,11 @@ class Parser(object):
 
         self._peeked_reos = None
 
-    def _rule_func_get(self, name):
-        rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
-
-        rule_func = getattr(self, rule_func_name)
-
-        return rule_func
-
-    def _match(self, reo, txt):
-        matched = reo.match(txt)
-
-        if matched:
-            matched_len = len(matched.group())
-
-            if matched_len > 0:
-                matched_txt = txt[:matched_len]
-
-                self._update_state(matched_txt)
-
-                txt = txt[matched_len:]
-
-        return matched, txt
-
     def _peek(self, token_names, is_required=False, is_branch=False):
         for token_name in token_names:
             reo = self._TOKEN_REOS[token_name]
 
-            matched = reo.match(self._txt)
+            matched = reo.match(self._txt, self._pos)
 
             if matched:
                 self._peeked_reos = None
@@ -205,9 +188,29 @@ class Parser(object):
 
         if is_required:
             self._error()
-            assert 0
         else:
             return None
+
+    def _scan_token(self, token_name, new_ctx=False):
+        reo = self._TOKEN_REOS[token_name]
+
+        matched = self._match(reo)
+
+        if matched is None:
+            self._error(reps=[reo.pattern])
+
+        if new_ctx:
+            ctx = AttrDict()
+
+            ctx.name = ''
+
+            ctx.par = self._ctx
+        else:
+            ctx = self._ctx
+
+        ctx.rem = matched
+
+        return ctx
 
     def _scan_rule(self, name):
         ctx_par = self._ctx
@@ -215,7 +218,7 @@ class Parser(object):
         self._scan_lv += 1
 
         if self._ws_reo:
-            _, self._txt = self._match(self._ws_reo, self._txt)
+            self._match(self._ws_reo)
 
         ctx_new = AttrDict()
 
@@ -234,6 +237,7 @@ class Parser(object):
             debug_info = AttrDict()
             debug_info[self._DK_NAME] = name
             debug_info[self._DK_TXT] = self._txt
+            debug_info[self._DK_POS] = self._pos
             debug_info[self._DK_ROW] = self._row
             debug_info[self._DK_COL] = self._col
             debug_info[self._DK_SLV] = self._scan_lv
@@ -261,30 +265,24 @@ class Parser(object):
             self._ctx = ctx_par
 
         if self._ws_reo:
-            _, self._txt = self._match(self._ws_reo, self._txt)
+            self._match(self._ws_reo)
 
         return ctx_new
 
-    def _scan_token(self, token_name, new_ctx=False):
-        reo = self._TOKEN_REOS[token_name]
+    def _match(self, reo):
+        matched = reo.match(self._txt, self._pos)
 
-        matched, self._txt = self._match(reo, self._txt)
+        if matched:
+            matched_txt = matched.group()
 
-        if matched is None:
-            self._error(reps=[reo.pattern])
+            matched_len = len(matched_txt)
 
-        if new_ctx:
-            ctx = AttrDict()
+            if matched_len > 0:
+                self._pos += matched_len
 
-            ctx.name = ''
+                self._update_state(matched_txt)
 
-            ctx.par = self._ctx
-        else:
-            ctx = self._ctx
-
-        ctx.rem = matched
-
-        return ctx
+        return matched
 
     def _update_state(self, matched_txt):
         row_cnt = matched_txt.count('\n')
@@ -300,10 +298,18 @@ class Parser(object):
 
             self._col = len(last_row_txt)
 
+    def _rule_func_get(self, name):
+        rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
+
+        rule_func = getattr(self, rule_func_name)
+
+        return rule_func
+
     def _error(self, reps=None):
         raise ScanError(
             ctx=self._ctx,
             txt=self._txt,
+            pos=self._pos,
             row=self._row,
             col=self._col,
             reps=reps if reps else
@@ -330,10 +336,10 @@ class Parser(object):
         ctx.rule_defs = rule_seq.res
         # ```
         end = self._scan_rule('end')
-    
+
     def end(self, ctx):
         end = self._scan_token('end')
-    
+
     def args_def(self, ctx):
         args_sign = self._scan_rule('args_sign')
         args_group = self._scan_rule('args_group')
@@ -346,10 +352,10 @@ class Parser(object):
         args = dict(pairs)
         ctx.res = args
         # ```
-    
+
     def args_sign(self, ctx):
         args_sign = self._scan_token('args_sign')
-    
+
     def args_group(self, ctx):
         brkt_beg = self._scan_rule('brkt_beg')
         if self._peek(['brkt_end']):
@@ -358,13 +364,13 @@ class Parser(object):
             arg_item = self._scan_rule('arg_item')
         else:
             self._error()
-    
+
     def brkt_beg(self, ctx):
         brkt_beg = self._scan_token('brkt_beg')
-    
+
     def brkt_end(self, ctx):
         brkt_end = self._scan_token('brkt_end')
-    
+
     def arg_item(self, ctx):
         arg_expr = self._scan_rule('arg_expr')
         # ```
@@ -383,7 +389,7 @@ class Parser(object):
                 self._error()
         else:
             self._error()
-    
+
     def arg_expr(self, ctx):
         arg_key = self._scan_rule('arg_key')
         arg_kvsep = self._scan_rule('arg_kvsep')
@@ -391,22 +397,22 @@ class Parser(object):
         # ```
         ctx.res = (arg_key.res, arg_val.res)
         # ```
-    
+
     def arg_key(self, ctx):
         arg_key = self._scan_token('rule_name')
         # ```
         ctx.res = arg_key.rem.group()
         # ```
-    
+
     def arg_kvsep(self, ctx):
         arg_kvsep = self._scan_token('arg_kvsep')
-    
+
     def arg_val(self, ctx):
         lit_val = self._scan_rule('lit_val')
         # ```
         ctx.res = lit_val.res
         # ```
-    
+
     def lit_val(self, ctx):
         if self._peek(['regex_str']):
             lit_str = self._scan_rule('lit_str')
@@ -430,34 +436,34 @@ class Parser(object):
             # ```
         else:
             self._error()
-    
+
     def lit_str(self, ctx):
         lit_str = self._scan_token('regex_str')
         # ```
         ctx.res = eval(lit_str.rem.group())
         # ```
-    
+
     def lit_num(self, ctx):
         lit_num = self._scan_token('lit_num')
         # ```
         ctx.res = eval(lit_num.rem.group())
         # ```
-    
+
     def lit_bool(self, ctx):
         lit_bool = self._scan_token('lit_bool')
         # ```
         ctx.res = True if (lit_bool.rem.group() == 'True') else False
         # ```
-    
+
     def lit_none(self, ctx):
         lit_none = self._scan_token('lit_none')
         # ```
         ctx.res = None
         # ```
-    
+
     def arg_sep(self, ctx):
         arg_sep = self._scan_token('arg_sep')
-    
+
     def rule_seq(self, ctx):
         # ```
         ctx.res = []
@@ -472,7 +478,7 @@ class Parser(object):
                 'end'],
                 is_required=True) != 'rule_name':
                 break
-    
+
     def rule_def(self, ctx):
         rule_name = self._scan_rule('rule_name')
         rule_colon = self._scan_rule('rule_colon')
@@ -495,16 +501,16 @@ class Parser(object):
         # ```
         ctx.res = RuleDef(name=rule_name.res, item=or_expr.res, args=args)
         # ```
-    
+
     def rule_name(self, ctx):
         rule_name = self._scan_token('rule_name')
         # ```
         ctx.res = rule_name.rem.group()
         # ```
-    
+
     def rule_colon(self, ctx):
         rule_colon = self._scan_token('rule_colon')
-    
+
     def or_expr(self, ctx):
         seq_expr = self._scan_rule('seq_expr')
         # ```
@@ -525,10 +531,10 @@ class Parser(object):
         # ```
         ctx.res = ExprOr(items) if len(items) > 1 else items[0]
         # ```
-    
+
     def or_expr_op(self, ctx):
         or_expr_op = self._scan_token('or_expr_op')
-    
+
     def seq_expr(self, ctx):
         # ```
         items = []
@@ -556,9 +562,9 @@ class Parser(object):
                 'rule_name',
                 'brkt_beg',
                 'brkt_end',
-                'or_expr_op',
                 'sqrbrkt_beg',
                 'sqrbrkt_end',
+                'or_expr_op',
                 'end'],
                 is_required=True) == 'code':
                 code = self._scan_rule('code')
@@ -573,8 +579,8 @@ class Parser(object):
                 'sqrbrkt_beg',
                 'rule_name',
                 'brkt_end',
-                'or_expr_op',
                 'sqrbrkt_end',
+                'or_expr_op',
                 'end'],
                 is_required=True) not in [
                 'rule_ref',
@@ -586,13 +592,13 @@ class Parser(object):
         # ```
         ctx.res = ExprSeq(items) if len(items) > 1 else items[0]
         # ```
-    
+
     def code(self, ctx):
         code = self._scan_token('code')
         # ```
         ctx.res = Code(code.rem.group(2))
         # ```
-    
+
     def occ_expr(self, ctx):
         if self._peek(['sqrbrkt_beg']):
             occ01_group = self._scan_rule('occ01_group')
@@ -617,9 +623,9 @@ class Parser(object):
                 'code',
                 'brkt_beg',
                 'brkt_end',
-                'or_expr_op',
                 'sqrbrkt_beg',
                 'sqrbrkt_end',
+                'or_expr_op',
                 'end'],
                 is_required=True) in [
                 'occ0m_trailer',
@@ -647,10 +653,10 @@ class Parser(object):
                 ctx.res = atom.res
             elif occ_type == 0:
                 item = atom.res
-            
+
                 while isinstance(item, ExprOcc01):
                     item = item.item
-            
+
                 if isinstance(item, ExprOcc0m):
                     ctx.res = item
                 elif isinstance(item, ExprOcc1m):
@@ -659,17 +665,17 @@ class Parser(object):
                     ctx.res = ExprOcc01(item)
             elif occ_type == 1:
                 item = atom.res
-            
+
                 while isinstance(item, (ExprOcc01, ExprOcc0m, ExprOcc1m)):
                     item = item.item
-            
+
                 ctx.res = ExprOcc0m(item)
             elif occ_type == 2:
                 item = atom.res
-            
+
                 while isinstance(item, ExprOcc1m):
                     item = item.item
-            
+
                 if isinstance(item, ExprOcc01):
                     ctx.res = ExprOcc0m(item.item)
                 elif isinstance(item, ExprOcc0m):
@@ -681,17 +687,17 @@ class Parser(object):
             # ```
         else:
             self._error()
-    
+
     def occ01_group(self, ctx):
         sqrbrkt_beg = self._scan_rule('sqrbrkt_beg')
         or_expr = self._scan_rule('or_expr')
         sqrbrkt_end = self._scan_rule('sqrbrkt_end')
         # ```
         item = or_expr.res
-        
+
         while isinstance(item, ExprOcc01):
             item = item.item
-        
+
         if isinstance(item, ExprOcc0m):
             ctx.res = item
         elif isinstance(item, ExprOcc1m):
@@ -699,22 +705,22 @@ class Parser(object):
         else:
             ctx.res = ExprOcc01(item)
         # ```
-    
+
     def sqrbrkt_beg(self, ctx):
         sqrbrkt_beg = self._scan_token('sqrbrkt_beg')
-    
+
     def sqrbrkt_end(self, ctx):
         sqrbrkt_end = self._scan_token('sqrbrkt_end')
-    
+
     def occ01_trailer(self, ctx):
         occ01_trailer = self._scan_token('occ01_trailer')
-    
+
     def occ0m_trailer(self, ctx):
         occ0m_trailer = self._scan_token('occ0m_trailer')
-    
+
     def occ1m_trailer(self, ctx):
         occ1m_trailer = self._scan_token('occ1m_trailer')
-    
+
     def atom(self, ctx):
         if self._peek(['regex_str']):
             regex_str = self._scan_rule('regex_str')
@@ -732,9 +738,9 @@ class Parser(object):
                 'occ0m_trailer',
                 'occ1m_trailer',
                 'occ01_trailer',
-                'or_expr_op',
                 'sqrbrkt_beg',
                 'sqrbrkt_end',
+                'or_expr_op',
                 'end'],
                 is_required=True) == 'args_sign':
                 args_def = self._scan_rule('args_def')
@@ -756,20 +762,20 @@ class Parser(object):
             # ```
         else:
             self._error()
-    
+
     def regex_str(self, ctx):
         regex_str = self._scan_token('regex_str')
         # ```
         ctx.res = regex_str.rem.group()
         # ```
-    
+
     def rule_ref(self, ctx):
         rule_ref = self._scan_token('rule_ref')
         # ```
         name = rule_ref.rem.group(1)
         ctx.res = RuleRef(name)
         # ```
-    
+
     def group(self, ctx):
         brkt_beg = self._scan_rule('brkt_beg')
         or_expr = self._scan_rule('or_expr')
@@ -808,12 +814,13 @@ def parser_debug_infos_to_msg(debug_infos, txt):
     for debug_info in debug_infos:
         row_txt = rows[debug_info.row]
 
-        msg = '{indent}{error_sign}{name}: {row}.{col}: {txt}'.format(
+        msg = '{indent}{error_sign}{name}: {row}.{col} ({pos}): {txt}'.format(
             indent='    ' * debug_info.slv,
             error_sign='' if debug_info.sss else '!',
             name=debug_info.name,
             row=debug_info.row + 1,
             col=debug_info.col + 1,
+            pos=debug_info.pos + 1,
             txt=repr(
                 row_txt[:debug_info.col] + '|' + row_txt[debug_info.col:]
             ),
@@ -858,7 +865,8 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
     col_mark = ' ' * exc.col + '^'
 
     msg = (
-        'Rule `{rule}` failed at {row}.{col} ({ctx_msg}):\n'
+        'Rule `{rule}` failed at {row}.{col} ({pos})'
+        ' (ctx: {ctx_msg}):\n'
         '```\n'
         '{row_txt}\n'
         '{col_mark}\n'
@@ -867,6 +875,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
         rule=exc.ctx.name,
         row=exc.row + 1,
         col=exc.col + 1,
+        pos=exc.pos + 1,
         ctx_msg=ctx_msg,
         row_txt=row_txt,
         col_mark=col_mark,
@@ -876,7 +885,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
 
     if exc.reps:
         msg = 'Failed matching {0}pattern{1}:\n{2}\n'.format(
-            'one of the ' if len(exc.reps) > 1 else '',
+            'one of the ' if len(exc.reps) > 1 else 'the ',
             's' if len(exc.reps) > 1 else '',
             '\n'.join(exc.reps),
         )
@@ -912,7 +921,8 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
             col_mark = ' ' * exc.col + '^'
 
             msg = (
-                'Rule `{rule}` failed at {row}.{col} ({ctx_msg}):\n'
+                'Rule `{rule}` failed at {row}.{col} ({pos})'
+                ' (ctx: {ctx_msg}):\n'
                 '```\n'
                 '{row_txt}\n'
                 '{col_mark}\n'
@@ -921,6 +931,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
                 rule=exc.ctx.name,
                 row=exc.row + 1,
                 col=exc.col + 1,
+                pos=exc.pos + 1,
                 ctx_msg=ctx_msg,
                 row_txt=row_txt,
                 col_mark=col_mark,
@@ -956,22 +967,24 @@ def get_ctx_names(ctx):
 
 
 def main(args=None):
-    from argparse import ArgumentParser
-
     args_parser = ArgumentParser()
 
-    args_parser.add_argument('-f', dest='input_file_path', required=True)
+    args_parser.add_argument(
+        '-s', dest='source_file_path', required=True, help='Source file path.'
+    )
 
-    args_parser.add_argument('-d', dest='debug_on', action='store_true')
+    args_parser.add_argument(
+        '-d', dest='debug_on', action='store_true', help='Debug message on.'
+    )
 
     args_obj = args_parser.parse_args(args)
 
-    input_file_path = args_obj.input_file_path
+    source_file_path = args_obj.source_file_path
 
     try:
-        rules_txt = open(input_file_path).read()
+        rules_txt = open(source_file_path).read()
     except Exception:
-        msg = 'Failed reading input file: `{0}`\n'.format(input_file_path)
+        msg = 'Failed reading source file: `{0}`\n'.format(source_file_path)
 
         sys.stderr.write(msg)
 

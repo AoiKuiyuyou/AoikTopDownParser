@@ -31,10 +31,10 @@ args_group:
     brkt_beg (brkt_end | arg_item)
 
 brkt_beg:
-    '[(]'
+    r'\('
 
 brkt_end:
-    '[)]'
+    r'\)'
 
 arg_item:
     arg_expr
@@ -55,7 +55,7 @@ arg_key:
     `ctx.res = arg_key.rem.group()`
 
 arg_kvsep:
-    '[=]'
+    '='
 
 arg_val:
     lit_val
@@ -90,7 +90,7 @@ lit_none:
     `ctx.res = None`
 
 arg_sep:
-    '[,]'
+    ','
 
 rule_seq:
     `ctx.res = []`
@@ -113,7 +113,7 @@ rule_name:
     `ctx.res = rule_name.rem.group()`
 
 rule_colon:
-    '[:]'
+    ':'
 
 or_expr:
     seq_expr
@@ -125,7 +125,7 @@ or_expr:
     `ctx.res = ExprOr(items) if len(items) > 1 else items[0]`
 
 or_expr_op:
-    '[|]'
+    r'\|'
 
 seq_expr:
     `items = []`
@@ -213,13 +213,13 @@ sqrbrkt_end:
     r'\]'
 
 occ01_trailer:
-    '[?]'
+    r'\?'
 
 occ0m_trailer:
-    '[*]'
+    r'\*'
 
 occ1m_trailer:
-    '[+]'
+    r'\+'
 
 atom:
     regex_str

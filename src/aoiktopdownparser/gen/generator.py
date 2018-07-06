@@ -340,17 +340,15 @@ def get_single_pattern(item):
     if isinstance(item, ExprSeq):
         single_pattern_item = None
 
-        exprseq = item
-
-        for item in exprseq.items:
-            if isinstance(item, Pattern):
+        for child_item in item.items:
+            if isinstance(child_item, Pattern):
                 if single_pattern_item is not None:
                     single_pattern_item = None
 
                     break
                 else:
-                    single_pattern_item = item
-            elif not isinstance(item, Code):
+                    single_pattern_item = child_item
+            elif not isinstance(child_item, Code):
                 single_pattern_item = None
 
                 break

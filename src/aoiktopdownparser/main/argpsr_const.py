@@ -84,7 +84,7 @@ ARG_GEN_PSR_DEBUG_H = (
 ).format('on' if ARG_GEN_PSR_DEBUG_D else 'off')
 
 
-ARG_DEBUG_F = '-V'
+ARG_DEBUG_F = '-d'
 ARG_DEBUG_K = 'ARG_DEBUG_K'
 ARG_DEBUG_D = True
 ARG_DEBUG_V = '1|0'

@@ -353,11 +353,11 @@ class ExprSeq(AstNode):
         for item in self.items:
             item_first_set = item.get_first_set()
 
-            has_empty_pattern_info = add_nonempty_pattern_infos(
+            has_empty_pattern = add_nonempty_pattern_infos(
                 first_set, item_first_set
             )
 
-            if has_empty_pattern_info:
+            if has_empty_pattern:
                 continue
             else:
                 break
@@ -383,11 +383,11 @@ class ExprSeq(AstNode):
 
                 later_item_first_set = later_item.get_first_set()
 
-                has_empty_pattern_info = add_nonempty_pattern_infos(
+                has_empty_pattern = add_nonempty_pattern_infos(
                     item_follow_set, later_item_first_set
                 )
 
-                if not has_empty_pattern_info:
+                if not has_empty_pattern:
                     break
             else:
                 item_follow_set.update(self.get_follow_set())
@@ -468,14 +468,14 @@ class ExprOr(AstNode):
             #     self._ori()
             #     try:
             #         ...
-            #     except Er: self._ori(0)
+            #     except ScanError: self._ori(0)
             #     else: self._ori(1)
             #     self._ori()
             #     try:
             #         ...
-            #     except Er: self._ori(0)
+            #     except ScanError: self._ori(0)
             #     else: self._ori(1)
-            # except Ok: self._or(1)
+            # except ScanOk: self._or(1)
             # else: self._or(0)
             # ```
 
@@ -487,14 +487,14 @@ class ExprOr(AstNode):
 
                 txts.append(add_indent(item_txt))
 
-                txts.append(r'except Er: self._ori(0)')
+                txts.append(r'except ScanError: self._ori(0)')
                 txts.append(r'else: self._ori(1)')
 
             res = '\n'.join(txts)
 
             res = 'self._or()\n' +\
                   'try:\n' + add_indent(res) \
-                  + '\nexcept Ok: self._or(1)' \
+                  + '\nexcept ScanOk: self._or(1)' \
                   + '\nelse: self._or(0)'
         else:
             nullable_item_infos = []
@@ -642,7 +642,7 @@ class ExprOcc01(AstNode):
             # self._o01()
             # try:
             #     ...
-            # except Er: self._o01(0)
+            # except ScanError: self._o01(0)
             # else: self._o01(1)
             # ```
 
@@ -653,7 +653,7 @@ class ExprOcc01(AstNode):
 
             txts.append(add_indent(item_txt))
 
-            txts.append('except Er: self._o01(0)')
+            txts.append('except ScanError: self._o01(0)')
             txts.append('else: self._o01(1)')
         else:
             is_in_expror = kwargs.get('is_in_expror', False)
@@ -766,7 +766,7 @@ class ExprOcc0m(AstNode):
             #     while 1:
             #         ...
             #         self._o0m(1)
-            # except Er: self._o0m(0)
+            # except ScanError: self._o0m(0)
             # ```
 
             txts.append('self._o0m()')
@@ -778,7 +778,7 @@ class ExprOcc0m(AstNode):
             txts.append(add_indent(item_txt, 2))
 
             txts.append('        self._o0m(1)')
-            txts.append('except Er: self._o0m(0)')
+            txts.append('except ScanError: self._o0m(0)')
         else:
             item_first_set = self.item.get_first_set()
 
@@ -850,7 +850,7 @@ class ExprOcc1m(AstNode):
             #     while 1:
             #         ...
             #         self._o1m(1)
-            # except Er: self._o1m(0)
+            # except ScanError: self._o1m(0)
             # ```
 
             txts.append('self._o1m()')
@@ -862,7 +862,7 @@ class ExprOcc1m(AstNode):
             txts.append(add_indent(item_txt, 2))
 
             txts.append('        self._o1m(1)')
-            txts.append('except Er: self._o1m(0)')
+            txts.append('except ScanError: self._o1m(0)')
         else:
             item_first_set = self.item.get_first_set()
 
@@ -872,10 +872,10 @@ class ExprOcc1m(AstNode):
 
             item_first_set_new_count = len(item_first_set)
 
-            has_empty_pattern_info = \
+            has_empty_pattern = \
                 item_first_set_new_count != item_first_set_old_count
 
-            if has_empty_pattern_info:
+            if has_empty_pattern:
                 peek_args_txt = get_peek_args_txt(
                     item_first_set, to_token_name
                 )
@@ -947,15 +947,15 @@ def has_empty_pattern_info(pattern_infos):
 
 
 def add_nonempty_pattern_infos(to_set, from_set):
-    has_empty_pattern_info = False
+    has_empty_pattern = False
 
     for pattern_info in from_set:
         if pattern_info in EMPTY_PATTERN_INFOS:
-            has_empty_pattern_info = True
+            has_empty_pattern = True
         else:
             to_set.add(pattern_info)
 
-    return has_empty_pattern_info
+    return has_empty_pattern
 
 
 def get_nonempty_pattern_infos(pattern_infos):

@@ -2,7 +2,7 @@
 from __future__ import absolute_import
 
 
-# 1 and 2 are used by `argparse`.
+# 2 is used by `argparse`.
 MAIN_RET_V_PSR_TPLT_FILE_READ_ERR = 3
 MAIN_RET_V_EXT_OPTS_LOAD_ERR = 4
 MAIN_RET_V_RULES_FILE_READ_ERR = 5

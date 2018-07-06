@@ -310,7 +310,7 @@ def main_imp(args=None):
             mod_name='aoiktopdownparser._tmpmod_parser'
         )
     except Exception:
-        msg = '# Error\nFailed loading generated parser module.\n'
+        msg = '# Error\nFailed loading the generated parser module.\n'
 
         sys.stderr.write(msg)
 
@@ -323,7 +323,7 @@ def main_imp(args=None):
 
     gen_psr_debug = getattr(args_obj, ARG_GEN_PSR_DEBUG_K)
 
-    parser, parsing_result, exc_info = parser_mod.parse(
+    parser, parsing_result, exc_info = getattr(parser_mod, 'parse')(
         src_txt,
         rule=entry_rule,
         debug=gen_psr_debug,
@@ -343,7 +343,7 @@ def main_imp(args=None):
     if exc_info is not None:
         msg = scan_error_to_msg(
             exc_info=exc_info,
-            scan_error_class=parser_mod.ScanError,
+            scan_error_class=getattr(parser_mod, 'ScanError'),
             title='# Error\nGenerated parser failed parsing source data.',
             txt=src_txt,
         )
