@@ -129,7 +129,7 @@ class Parser(object):
     # Scan is success
     _DK_SSS = 'sss'
 
-    _TOKEN_REOS = {
+    _TOKEN_NAME_TO_REGEX_OBJ = {
         'arg_kvsep': re.compile('='),
         'arg_sep': re.compile(','),
         'args_sign': re.compile('@'),
@@ -198,9 +198,9 @@ class Parser(object):
 
     def _peek(self, token_names, is_required=False, is_branch=False):
         for token_name in token_names:
-            reo = self._TOKEN_REOS[token_name]
+            regex_obj = self._TOKEN_NAME_TO_REGEX_OBJ[token_name]
 
-            matched = reo.match(self._txt, self._pos)
+            matched = regex_obj.match(self._txt, self._pos)
 
             if matched:
                 return token_name
@@ -211,9 +211,9 @@ class Parser(object):
             return None
 
     def _scan_token(self, token_name, new_ctx=False):
-        reo = self._TOKEN_REOS[token_name]
+        regex_obj = self._TOKEN_NAME_TO_REGEX_OBJ[token_name]
 
-        matched = self._match(reo)
+        matched = self._match(regex_obj)
 
         if matched is None:
             self._error(token_names=[token_name])
@@ -288,8 +288,8 @@ class Parser(object):
 
         return ctx_new
 
-    def _match(self, reo):
-        matched = reo.match(self._txt, self._pos)
+    def _match(self, regex_obj):
+        matched = regex_obj.match(self._txt, self._pos)
 
         if matched:
             matched_txt = matched.group()

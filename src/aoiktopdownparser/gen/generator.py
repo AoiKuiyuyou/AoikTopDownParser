@@ -302,7 +302,7 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
 
         reo_txts.append(reo_txt)
 
-    reos_txt = u'_TOKEN_REOS = {{\n{0}\n}}\n'.format(
+    reos_txt = u'_TOKEN_NAME_TO_REGEX_OBJ = {{\n{0}\n}}\n'.format(
         add_indent('\n'.join(reo_txts))
     )
     reos_txt = add_indent(reos_txt)
