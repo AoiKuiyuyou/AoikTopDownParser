@@ -1,6 +1,7 @@
 # coding: utf-8
 from __future__ import absolute_import
 
+import codecs
 import functools
 import os.path
 from pprint import pformat
@@ -80,7 +81,7 @@ def main_imp(args=None):
 
     if rules_file_path is not None:
         try:
-            rules_txt = open(rules_file_path).read()
+            rules_txt = codecs.open(rules_file_path, encoding='utf-8').read()
         except Exception:
             msg = '# Error\nFailed reading rules file.\n'\
                 'File path is `{}`.\n'\
@@ -143,7 +144,7 @@ def main_imp(args=None):
         return MAIN_RET_V_TPLT_FILE_READ_ERR
 
     try:
-        parser_tplt_text = open(tplt_file_path).read()
+        parser_tplt_text = codecs.open(tplt_file_path, encoding='utf-8').read()
     except Exception:
         msg = '# Error\nFailed reading parser template file: {0}.\n'.format(
             tplt_file_path
@@ -268,8 +269,9 @@ def main_imp(args=None):
 
         else:
             try:
-                with open(parser_output_file_path, mode='w') as \
-                        parser_output_file:
+                with codecs.open(
+                    parser_output_file_path, mode='w', encoding='utf-8'
+                ) as parser_output_file:
                     parser_output_file.write(parser_txt)
 
             except Exception:
@@ -301,7 +303,7 @@ def main_imp(args=None):
 
     if src_file_path is not None:
         try:
-            src_file = open(src_file_path)
+            src_file = codecs.open(src_file_path, encoding='utf-8')
 
             src_txt = src_file.read()
         except Exception:
