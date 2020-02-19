@@ -288,13 +288,13 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
     for pattern_info, token_name in sorted(
         to_token_name.items(), key=(lambda x: x[1])
     ):
-        if pattern_info[1] == '0':
-            reo_txt = '\'{0}\': re.compile({1}),'.format(
+        if pattern_info[1] == u'0':
+            reo_txt = u'\'{0}\': re.compile({1}),'.format(
                 token_name,
                 pattern_info[0],
             )
         else:
-            reo_txt = '\'{0}\': re.compile({1}, {2}),'.format(
+            reo_txt = u'\'{0}\': re.compile({1}, {2}),'.format(
                 token_name,
                 pattern_info[0],
                 pattern_info[1],
@@ -302,7 +302,7 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
 
         reo_txts.append(reo_txt)
 
-    reos_txt = '_TOKEN_REOS = {{\n{0}\n}}\n'.format(
+    reos_txt = u'_TOKEN_REOS = {{\n{0}\n}}\n'.format(
         add_indent('\n'.join(reo_txts))
     )
     reos_txt = add_indent(reos_txt)
