@@ -52,7 +52,7 @@ arg_expr:
 
 arg_key:
     '[a-zA-Z_][a-zA-Z0-9_]*'
-    `ctx.res = arg_key.rem.group()`
+    `ctx.res = arg_key.res.group()`
 
 arg_kvsep:
     '='
@@ -69,7 +69,7 @@ lit_val:
 
 lit_str:
     'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
-    `ctx.res = eval(lit_str.rem.group())`
+    `ctx.res = eval(lit_str.res.group())`
 
 lit_num:
     r"""
@@ -79,11 +79,11 @@ lit_num:
 ([.]\d*)?       # Fraction part
 (e[-+]?\d+)?    # Exponent part
 """ @(flags='re.VERBOSE | re.IGNORECASE')
-    `ctx.res = eval(lit_num.rem.group())`
+    `ctx.res = eval(lit_num.res.group())`
 
 lit_bool:
     '(True|False)(?![a-zA-Z0-9_])'
-    `ctx.res = True if (lit_bool.rem.group() == 'True') else False`
+    `ctx.res = True if (lit_bool.res.group() == 'True') else False`
 
 lit_none:
     'None(?![a-zA-Z0-9_])'
@@ -110,7 +110,7 @@ rule_def:
 
 rule_name:
     '[a-zA-Z_][a-zA-Z0-9_]*'
-    `ctx.res = rule_name.rem.group()`
+    `ctx.res = rule_name.res.group()`
 
 rule_colon:
     ':'
@@ -138,7 +138,7 @@ seq_expr:
 
 code:
     r'(`+)((?:.|\n)*?)\1'
-    `ctx.res = Code(code.rem.group(2))`
+    `ctx.res = Code(code.res.group(2))`
 
 occ_expr:
     occ01_group
@@ -233,12 +233,12 @@ atom:
 
 regex_str:
     'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
-    `ctx.res = regex_str.rem.group()`
+    `ctx.res = regex_str.res.group()`
 
 rule_ref:
     r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])'
     ```
-name = rule_ref.rem.group(1)
+name = rule_ref.res.group(1)
 ctx.res = RuleRef(name)
     ```
 

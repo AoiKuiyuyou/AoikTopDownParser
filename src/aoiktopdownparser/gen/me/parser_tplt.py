@@ -7,6 +7,16 @@ import re
 import sys
 from traceback import format_exception
 
+from aoiktopdownparser.gen.ast import Code
+from aoiktopdownparser.gen.ast import ExprOcc0m
+from aoiktopdownparser.gen.ast import ExprOcc01
+from aoiktopdownparser.gen.ast import ExprOcc1m
+from aoiktopdownparser.gen.ast import ExprOr
+from aoiktopdownparser.gen.ast import ExprSeq
+from aoiktopdownparser.gen.ast import Pattern
+from aoiktopdownparser.gen.ast import RuleDef
+from aoiktopdownparser.gen.ast import RuleRef
+
 
 class AttrDict(dict):
     __getattr__ = dict.__getitem__
@@ -137,7 +147,7 @@ class Parser(object):
         if self._debug:
             self._debug_infos = []
 
-        self._ws_rep = r'\s*'
+        self._ws_rep = r'([\s]*(#[^\n]*)?)*'
 
         self._ws_reo = re.compile(self._ws_rep)\
             if self._ws_rep is not None else None

@@ -7,12 +7,6 @@ from __future__ import absolute_import
 # Whether enable backtracking
 GS_BACKTRACKING_ON = 'GS_BACKTRACKING_ON'
 
-# Parser template file path
-GS_PARSER_TPLT = 'GS_PARSER_TPLT'
-
-# Default is using `aoiktopdownparser.gen.parser_tplt.py`
-GS_PARSER_TPLT_V_DFT = None
-
 # Rule functions' name prefix
 GS_RULE_FUNC_NAME_PRF = 'GS_RULE_FUNC_NAME_PRF'
 
@@ -47,6 +41,11 @@ SS_PRF = 'SS_'
 # Substitution settings below are internal. Do not specify values for them.
 # ----- BEG -----
 
+#
+SS_RULE_FIRST_SET_MAPPING = 'SS_RULE_FIRST_SET_MAPPING'
+
+SS_RULE_FOLLOW_SET_MAPPING = 'SS_RULE_FOLLOW_SET_MAPPING'
+
 # Rule RE objects
 SS_RULE_REOS = 'SS_RULE_REOS'
 
@@ -66,15 +65,6 @@ SS_BACKTRACKING_FUNCS = 'SS_BACKTRACKING_FUNCS'
 
 # Substitution settings below can be specified.
 
-# Import statements
-SS_IMPORTS = 'SS_IMPORTS'
-
 # Entry rule name.
 # Default is using the first rule.
 SS_ENTRY_RULE = 'SS_ENTRY_RULE'
-
-# White spaces RE pattern.
-# Given value must be a string literal in quotes.
-# If specified, the scan function will discard white spaces before and after
-# the scanning of each rule.
-SS_WS_REP = 'SS_WS_REP'

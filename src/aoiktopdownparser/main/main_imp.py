@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 import functools
+import os.path
 from pprint import pformat
 import sys
 from traceback import format_exc
@@ -14,8 +15,8 @@ from .. import __version__
 from ..gen.generator import get_parser_txt
 from ..gen.opts import OPTS
 from ..gen.parser import ScanError
+from ..gen.parser import debug_infos_to_msg
 from ..gen.parser import parse
-from ..gen.parser import parser_debug_infos_to_msg
 from ..gen.parser import scan_error_to_msg
 from .argpsr import ensure_args_spec
 from .argpsr import parser_make
@@ -30,6 +31,7 @@ from .argpsr_const import ARG_RULES_OBJ_URI_K
 from .argpsr_const import ARG_RULES_PSR_DEBUG_K
 from .argpsr_const import ARG_SRC_FILE_PATH_K
 from .argpsr_const import ARG_SRC_OBJ_URI_K
+from .argpsr_const import ARG_TPLT_FILE_PATH_K
 from .argpsr_const import ARG_VER_ON_K
 from .main_const import MAIN_RET_V_EXT_OPTS_LOAD_ERR
 from .main_const import MAIN_RET_V_PSR_CODE_CALL_ERR
@@ -43,6 +45,7 @@ from .main_const import MAIN_RET_V_RULES_PARSE_ERR
 from .main_const import MAIN_RET_V_SRC_FILE_READ_ERR
 from .main_const import MAIN_RET_V_SRC_OBJ_LOAD_ERR
 from .main_const import MAIN_RET_V_SRC_OBJ_NOT_STR_ERR
+from .main_const import MAIN_RET_V_TPLT_FILE_READ_ERR
 
 
 def main_imp(args=None):
@@ -120,6 +123,39 @@ def main_imp(args=None):
     else:
         assert 0
 
+    tplt_file_path = getattr(args_obj, ARG_TPLT_FILE_PATH_K)
+
+    if tplt_file_path is None:
+        tplt_file_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'gen/parser_tplt.py'
+        )
+
+    tplt_file_path = os.path.join('.', tplt_file_path)
+
+    if not os.path.isfile(tplt_file_path):
+        msg = '# Error\nParser template file not exists: {0}.\n'.format(
+            tplt_file_path
+        )
+
+        sys.stderr.write(msg)
+
+        return MAIN_RET_V_TPLT_FILE_READ_ERR
+
+    try:
+        parser_tplt_text = open(tplt_file_path).read()
+    except Exception:
+        msg = '# Error\nFailed reading parser template file: {0}.\n'.format(
+            tplt_file_path
+        )
+
+        sys.stderr.write(msg)
+
+        if debug_on:
+            sys.stderr.write('---\n{}---\n'.format(format_exc()))
+
+        return MAIN_RET_V_TPLT_FILE_READ_ERR
+
     opts = OPTS.copy()
 
     ext_opts_uri = getattr(args_obj, ARG_EXT_OPTS_URI_K)
@@ -162,7 +198,7 @@ def main_imp(args=None):
     if rules_parser_debug_on and parser._debug_infos:
         msg = '# Rules parser debug info\n'
 
-        msg += parser_debug_infos_to_msg(
+        msg += debug_infos_to_msg(
             debug_infos=parser._debug_infos, txt=rules_txt)
 
         msg += '\n\n'
@@ -193,6 +229,7 @@ def main_imp(args=None):
             # `ext_opts` should override `inline_opts`
             opts.update(ext_opts)
 
+    # `odf` means option-defining-file path.
     find_odf = functools.partial(
         find_odf_v2,
         inline_opts=inline_opts,
@@ -207,6 +244,7 @@ def main_imp(args=None):
     try:
         parser_txt = get_parser_txt(
             rules=parsing_result.rule_defs,
+            tplt_text=parser_tplt_text,
             opts=opts,
             find_odf=find_odf,
         )
@@ -334,7 +372,7 @@ def main_imp(args=None):
     if gen_psr_debug and parser._debug_infos:
         msg = '# Generated parser debug info\n'
 
-        msg += parser_debug_infos_to_msg(
+        msg += debug_infos_to_msg(
             debug_infos=parser._debug_infos, txt=src_txt
         )
 

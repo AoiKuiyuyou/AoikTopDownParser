@@ -30,7 +30,7 @@ EMPTY_PATTERN_INFOS = [
 ]
 
 
-class SyntaxError(Exception):
+class GrammarError(Exception):
     pass
 
 
@@ -283,7 +283,7 @@ class RuleRef(AstNode):
         if first_set is None:
             msg = 'Undefined rule name: `{0}`.'.format(self.name)
 
-            raise SyntaxError(msg)
+            raise GrammarError(msg)
 
         self.first_set = first_set
 
@@ -295,7 +295,7 @@ class RuleRef(AstNode):
         if rule_def is None:
             msg = 'Undefined rule name: `{}`.'.format(self.name)
 
-            raise SyntaxError(msg)
+            raise GrammarError(msg)
 
         if rule_def.is_follow_set_changed:
             rule_def.add_follow_set(follow_set)
@@ -571,8 +571,14 @@ class ExprOr(AstNode):
 
                 met_pattern_infos.update(union_set)
 
+            pattern_infos = sort_pattern_infos(met_pattern_infos)
+
+            token_names = [to_token_name[x] for x in pattern_infos]
+
             txts.append('else:')
-            txts.append('    self._error()')
+            txts.append('    self._error({0})'.format(
+                format_args(token_names)
+            ))
 
             res = '\n'.join(txts)
 
@@ -747,6 +753,7 @@ class ExprOcc0m(AstNode):
     def calc_follow_set(self, follow_set, to_first_set, to_rule_def):
         self.add_follow_set(follow_set)
 
+        # Use first set as follow set because the item can appear after itself.
         item_follow_set = set(self.item.get_first_set())
 
         add_nonempty_pattern_infos(item_follow_set, self.get_follow_set())
@@ -968,21 +975,27 @@ def get_nonempty_pattern_infos(pattern_infos):
     return nonempty_pattern_infos
 
 
+def format_args(args, indent=1):
+    text = (',\n' + '    ' * indent).join(
+        '\'{0}\''.format(x) for x in args
+    )
+
+    text = '[{0}{1}]'.format(
+        ('\n' + '    ' * indent) if len(args) > 1 else '',
+        text,
+    )
+
+    return text
+
+
 def get_peek_args_txt(first_set, to_token_name, indent=1):
     pattern_infos = sort_pattern_infos(first_set)
 
     token_names = [to_token_name[x] for x in pattern_infos]
 
-    peek_args_txt = (',\n' + '    ' * indent).join(
-        '\'{0}\''.format(x) for x in token_names
-    )
+    text = format_args(token_names, indent=indent)
 
-    peek_args_txt = '[{0}{1}]'.format(
-        ('\n' + '    ' * indent) if len(token_names) > 1 else '',
-        peek_args_txt,
-    )
-
-    return peek_args_txt
+    return text
 
 
 def get_peek_args_txt2(first_set, follow_set, to_token_name, indent=1):
@@ -1002,16 +1015,9 @@ def get_peek_args_txt2(first_set, follow_set, to_token_name, indent=1):
 
     token_names = [to_token_name[x] for x in pattern_infos]
 
-    peek_args_txt = (',\n' + '    ' * indent).join(
-        '\'{0}\''.format(x) for x in token_names
-    )
+    text = format_args(token_names, indent=indent)
 
-    peek_args_txt = '[{0}{1}]'.format(
-        ('\n' + '    ' * indent) if len(token_names) > 1 else '',
-        peek_args_txt,
-    )
-
-    return peek_args_txt
+    return text
 
 
 def sort_pattern_infos(pattern_infos):

@@ -26,15 +26,15 @@ class AttrDict(dict):
 class ScanError(Exception):
 
     def __init__(
-        self, ctx, txt, pos, row, col, reps=None, eis=None, eisp=None
+        self, ctx, txt, pos, row, col, token_names, eis=None, eisp=None
     ):
         self.ctx = ctx
 
-        newline_idx = txt.find('\n')
-        if newline_idx >= 0:
-            self.txt = txt[:newline_idx]
-        else:
-            self.txt = txt
+        self.txt = txt
+
+        self.lines = txt.split('\n')
+
+        self.line = self.lines[row]
 
         self.pos = pos
 
@@ -42,14 +42,44 @@ class ScanError(Exception):
 
         self.col = col
 
-        # RE patterns
-        self.reps = reps
+        # Expected token names
+        self.token_names = token_names
 
         # Scan exception infos of current branch
         self.eis = eis
 
         # Scan exception infos of previous branch
         self.eisp = eisp
+
+    def __str__(self):
+        ctx_names = get_ctx_names(self.ctx)
+
+        ctx_msg = ' '.join(ctx_names) if ctx_names else ''
+
+        col_mark = ' ' * self.col + '^'
+
+        source_text = (
+            '```\n'
+            '{0}\n'
+            '{1}\n'
+            '```'
+        ).format(self.line, col_mark)
+
+        text = (
+            'Rule `{rule_name}` failed at row {row} column {col} (char {pos}) (ctx: {ctx_msg}).\n'
+            'Expect token `{token_names}`.\n'
+            '{source_text}'
+        ).format(
+            rule_name=self.ctx.name,
+            ctx_msg=ctx_msg,
+            row=self.row + 1,
+            col=self.col + 1,
+            pos=self.pos + 1,
+            token_names=' | '.join(self.token_names),
+            source_text=source_text,
+        )
+
+        return text
 
 
 # Used in backtracking mode.
@@ -166,8 +196,6 @@ class Parser(object):
 
         self._state_stack = []
 
-        self._peeked_reos = None
-
     def _peek(self, token_names, is_required=False, is_branch=False):
         for token_name in token_names:
             reo = self._TOKEN_REOS[token_name]
@@ -175,19 +203,10 @@ class Parser(object):
             matched = reo.match(self._txt, self._pos)
 
             if matched:
-                self._peeked_reos = None
-
                 return token_name
 
-        reos = [self._TOKEN_REOS[x] for x in token_names]
-
-        if is_branch:
-            self._peeked_reos.extend(reos)
-        else:
-            self._peeked_reos = reos
-
         if is_required:
-            self._error()
+            self._error(token_names=token_names)
         else:
             return None
 
@@ -197,7 +216,7 @@ class Parser(object):
         matched = self._match(reo)
 
         if matched is None:
-            self._error(reps=[reo.pattern])
+            self._error(token_names=[token_name])
 
         if new_ctx:
             ctx = AttrDict()
@@ -208,7 +227,7 @@ class Parser(object):
         else:
             ctx = self._ctx
 
-        ctx.rem = matched
+        ctx.res = matched
 
         return ctx
 
@@ -305,16 +324,14 @@ class Parser(object):
 
         return rule_func
 
-    def _error(self, reps=None):
+    def _error(self, token_names):
         raise ScanError(
             ctx=self._ctx,
             txt=self._txt,
             pos=self._pos,
             row=self._row,
             col=self._col,
-            reps=reps if reps else
-            [x.pattern for x in self._peeked_reos]
-            if self._peeked_reos else None,
+            token_names=token_names,
             eis=self._scan_eis,
             eisp=self._scan_eis_prev,
         )
@@ -363,7 +380,9 @@ class Parser(object):
         elif self._peek(['rule_name'], is_branch=True):
             arg_item = self._scan_rule('arg_item')
         else:
-            self._error()
+            self._error([
+            'rule_name',
+            'brkt_end'])
 
     def brkt_beg(self, ctx):
         brkt_beg = self._scan_token('brkt_beg')
@@ -386,9 +405,13 @@ class Parser(object):
             elif self._peek(['rule_name'], is_branch=True):
                 arg_item = self._scan_rule('arg_item')
             else:
-                self._error()
+                self._error([
+                'rule_name',
+                'brkt_end'])
         else:
-            self._error()
+            self._error([
+            'brkt_end',
+            'arg_sep'])
 
     def arg_expr(self, ctx):
         arg_key = self._scan_rule('arg_key')
@@ -401,7 +424,7 @@ class Parser(object):
     def arg_key(self, ctx):
         arg_key = self._scan_token('rule_name')
         # ```
-        ctx.res = arg_key.rem.group()
+        ctx.res = arg_key.res.group()
         # ```
 
     def arg_kvsep(self, ctx):
@@ -435,24 +458,28 @@ class Parser(object):
             ctx.res = lit_none.res
             # ```
         else:
-            self._error()
+            self._error([
+            'lit_num',
+            'regex_str',
+            'lit_bool',
+            'lit_none'])
 
     def lit_str(self, ctx):
         lit_str = self._scan_token('regex_str')
         # ```
-        ctx.res = eval(lit_str.rem.group())
+        ctx.res = eval(lit_str.res.group())
         # ```
 
     def lit_num(self, ctx):
         lit_num = self._scan_token('lit_num')
         # ```
-        ctx.res = eval(lit_num.rem.group())
+        ctx.res = eval(lit_num.res.group())
         # ```
 
     def lit_bool(self, ctx):
         lit_bool = self._scan_token('lit_bool')
         # ```
-        ctx.res = True if (lit_bool.rem.group() == 'True') else False
+        ctx.res = True if (lit_bool.res.group() == 'True') else False
         # ```
 
     def lit_none(self, ctx):
@@ -505,7 +532,7 @@ class Parser(object):
     def rule_name(self, ctx):
         rule_name = self._scan_token('rule_name')
         # ```
-        ctx.res = rule_name.rem.group()
+        ctx.res = rule_name.res.group()
         # ```
 
     def rule_colon(self, ctx):
@@ -596,7 +623,7 @@ class Parser(object):
     def code(self, ctx):
         code = self._scan_token('code')
         # ```
-        ctx.res = Code(code.rem.group(2))
+        ctx.res = Code(code.res.group(2))
         # ```
 
     def occ_expr(self, ctx):
@@ -647,7 +674,10 @@ class Parser(object):
                     occ_type = 2
                     # ```
                 else:
-                    self._error()
+                    self._error([
+                    'occ0m_trailer',
+                    'occ1m_trailer',
+                    'occ01_trailer'])
             # ```
             if occ_type is None:
                 ctx.res = atom.res
@@ -686,7 +716,11 @@ class Parser(object):
                 assert 0
             # ```
         else:
-            self._error()
+            self._error([
+            'rule_ref',
+            'regex_str',
+            'brkt_beg',
+            'sqrbrkt_beg'])
 
     def occ01_group(self, ctx):
         sqrbrkt_beg = self._scan_rule('sqrbrkt_beg')
@@ -761,18 +795,21 @@ class Parser(object):
             ctx.res = group.res
             # ```
         else:
-            self._error()
+            self._error([
+            'rule_ref',
+            'regex_str',
+            'brkt_beg'])
 
     def regex_str(self, ctx):
         regex_str = self._scan_token('regex_str')
         # ```
-        ctx.res = regex_str.rem.group()
+        ctx.res = regex_str.res.group()
         # ```
 
     def rule_ref(self, ctx):
         rule_ref = self._scan_token('rule_ref')
         # ```
-        name = rule_ref.rem.group(1)
+        name = rule_ref.res.group(1)
         ctx.res = RuleRef(name)
         # ```
 
@@ -806,7 +843,7 @@ def parse(txt, rule=None, debug=False):
     return parser, parsing_result, exc_info
 
 
-def parser_debug_infos_to_msg(debug_infos, txt):
+def debug_infos_to_msg(debug_infos, txt):
     rows = txt.split('\n')
 
     msgs = []
@@ -851,46 +888,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
 
     msgs.append(msg)
 
-    ctx_names = get_ctx_names(exc.ctx)
-
-    ctx_msg = ''
-
-    if ctx_names:
-        ctx_msg = ' '.join(ctx_names)
-
-    rows = txt.split('\n')
-
-    row_txt = rows[exc.row]
-
-    col_mark = ' ' * exc.col + '^'
-
-    msg = (
-        'Rule `{rule}` failed at {row}.{col} ({pos})'
-        ' (ctx: {ctx_msg}):\n'
-        '```\n'
-        '{row_txt}\n'
-        '{col_mark}\n'
-        '```'
-    ).format(
-        rule=exc.ctx.name,
-        row=exc.row + 1,
-        col=exc.col + 1,
-        pos=exc.pos + 1,
-        ctx_msg=ctx_msg,
-        row_txt=row_txt,
-        col_mark=col_mark,
-    )
-
-    msgs.append(msg)
-
-    if exc.reps:
-        msg = 'Failed matching {0}pattern{1}:\n{2}\n'.format(
-            'one of the ' if len(exc.reps) > 1 else 'the ',
-            's' if len(exc.reps) > 1 else '',
-            '\n'.join(exc.reps),
-        )
-
-        msgs.append(msg)
+    msgs.append(str(exc))
 
     # Messages below are for backtracking mode
     reason_exc_infos = []
@@ -939,7 +937,7 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
 
             msgs.append(msg)
 
-    msg = '\n\n'.join(msgs)
+    msg = '\n'.join(msgs)
 
     return msg
 
@@ -995,9 +993,9 @@ def main(args=None):
     parser, parsing_result, exc_info = parse(rules_txt, debug=debug_on)
 
     if debug_on and parser._debug_infos:
-        msg = '# Parser debug info\n'
+        msg = '# ----- Parser debug info -----\n'
 
-        msg += parser_debug_infos_to_msg(
+        msg += debug_infos_to_msg(
             debug_infos=parser._debug_infos, txt=rules_txt
         )
 
@@ -1009,7 +1007,7 @@ def main(args=None):
         msg = scan_error_to_msg(
             exc_info=exc_info,
             scan_error_class=ScanError,
-            title='# Parsing error',
+            title='# ----- Parsing error -----',
             txt=rules_txt,
         )
 
@@ -1017,7 +1015,7 @@ def main(args=None):
 
         return 4
 
-    msg = '# Parsing result\n{0}\n'.format(
+    msg = '# ----- Parsing result -----\n{0}\n'.format(
         pformat(parsing_result, indent=4, width=1)
     )
 

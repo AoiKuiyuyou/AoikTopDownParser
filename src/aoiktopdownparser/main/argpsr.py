@@ -57,6 +57,11 @@ from .argpsr_const import ARG_SRC_OBJ_URI_F
 from .argpsr_const import ARG_SRC_OBJ_URI_H
 from .argpsr_const import ARG_SRC_OBJ_URI_K
 from .argpsr_const import ARG_SRC_OBJ_URI_V
+from .argpsr_const import ARG_TPLT_FILE_PATH_D
+from .argpsr_const import ARG_TPLT_FILE_PATH_F
+from .argpsr_const import ARG_TPLT_FILE_PATH_H
+from .argpsr_const import ARG_TPLT_FILE_PATH_K
+from .argpsr_const import ARG_TPLT_FILE_PATH_V
 from .argpsr_const import ARG_VER_ON_A
 from .argpsr_const import ARG_VER_ON_F
 from .argpsr_const import ARG_VER_ON_H
@@ -85,6 +90,14 @@ def parser_make():
         dest=ARG_RULES_OBJ_URI_K,
         metavar=ARG_RULES_OBJ_URI_V,
         help=ARG_RULES_OBJ_URI_H,
+    )
+
+    parser.add_argument(
+        ARG_TPLT_FILE_PATH_F,
+        dest=ARG_TPLT_FILE_PATH_K,
+        default=ARG_TPLT_FILE_PATH_D,
+        metavar=ARG_TPLT_FILE_PATH_V,
+        help=ARG_TPLT_FILE_PATH_H,
     )
 
     parser.add_argument(

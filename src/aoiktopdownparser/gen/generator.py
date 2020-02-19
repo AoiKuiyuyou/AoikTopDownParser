@@ -1,18 +1,12 @@
 # coding: utf-8
 from __future__ import absolute_import
 
-import os.path
-import sys
-
-from ..util.exc_util import raise_
 from ..util.indent_util import add_indent
 from ..util.path_util import join_file_paths
 from .ast import Code
 from .ast import ExprSeq
 from .ast import Pattern
 from .opts_const import GS_BACKTRACKING_ON
-from .opts_const import GS_PARSER_TPLT
-from .opts_const import GS_PARSER_TPLT_V_DFT
 from .opts_const import GS_RULE_FUNC_NAME_POF
 from .opts_const import GS_RULE_FUNC_NAME_POF_V_DFT
 from .opts_const import GS_RULE_FUNC_NAME_PRF
@@ -20,106 +14,50 @@ from .opts_const import GS_RULE_FUNC_NAME_PRF_V_DFT
 from .opts_const import SS_BACKTRACKING_FUNCS
 from .opts_const import SS_ENTRY_RULE
 from .opts_const import SS_PRF
+from .opts_const import SS_RULE_FIRST_SET_MAPPING
+from .opts_const import SS_RULE_FOLLOW_SET_MAPPING
 from .opts_const import SS_RULE_FUNC_NAME_POF
 from .opts_const import SS_RULE_FUNC_NAME_PRF
 from .opts_const import SS_RULE_FUNCS
 from .opts_const import SS_RULE_REOS
 from .opts_util import Path
-from .opts_util import Value
-from .opts_util import path_to_abs
 from .opts_util import read_path
 
 
-def get_parser_txt(rules, opts, find_odf):
-    # `odf` means option-defining-file path.
-    gs_tplt_odf = None
-
-    gs_tplt = opts.get(GS_PARSER_TPLT, GS_PARSER_TPLT_V_DFT)
-
-    tplt_data = None
-
-    tplt_path = None
-
-    if gs_tplt is GS_PARSER_TPLT_V_DFT:
-        tplt_path = join_file_paths(__file__, 'parser_tplt.py')
-    elif isinstance(gs_tplt, Value):
-        tplt_data = gs_tplt.val
-    elif isinstance(gs_tplt, (str, Path)):
-        if isinstance(gs_tplt, str):
-            tplt_path = gs_tplt
-        elif isinstance(gs_tplt, Path):
-            tplt_path = gs_tplt.path
-        else:
-            assert 0
-
-        if os.path.isabs(tplt_path):
-            pass
-        else:
-            rel_path = tplt_path
-
-            tplt_path = None
-
-            gs_tplt_odf = find_odf(GS_PARSER_TPLT)
-
-            if gs_tplt_odf is None:
-                msg = (
-                    'Unable to find absolute path for relative template file'
-                    ' path: `{}`'
-                ).format(rel_path)
-
-                raise ValueError(msg)
-
-            tplt_path = path_to_abs(
-                path=rel_path,
-                find_odf=find_odf,
-                opt_key=GS_PARSER_TPLT,
-            )
-
-            assert tplt_path is not None
-    else:
-        assert 0, gs_tplt
-
-    if tplt_data is None:
-        assert tplt_path is not None
-
-        try:
-            tplt_data = open(tplt_path).read()
-        except Exception:
-            msg = 'Failed reading template file: `{}`'.format(tplt_path)
-
-            if gs_tplt_odf is not None:
-                msg += (
-                    '\nThe template file is specified by option `{0}`'
-                    ' in file: `{1}`'
-                ).format(
-                    GS_PARSER_TPLT,
-                    os.path.abspath(gs_tplt_odf),
-                )
-
-            raise_(ValueError(msg), tb=sys.exc_info()[2])
-
-    #
+def get_parser_txt(rules, tplt_text, opts, find_odf):
+    # A set of tuples.
+    # Each tuple has two items.
+    # The first item is the match pattern.
+    # The second item is the match flag.
     pattern_infos = set()
 
     token_names = set()
 
-    # Map pattern info to token name
+    # Map pattern info to terminal token name
     to_token_name = {}
 
     for rule in rules:
+        # Get pattern infos of the rule.
+        # Container rules may have more than one pattern info.
         rule_pattern_infos = rule.get_pattern_infos()
 
+        # Add to the total set.
         pattern_infos.update(rule_pattern_infos)
 
+        # Get the only pattern of the rule.
         signle_pattern_item = get_single_pattern(rule.item)
 
+        # If the rule has only one pattern.
         if signle_pattern_item is not None:
             pattern_info = next(iter(rule_pattern_infos))
 
+            # Store the mapping from pattern info to terminal token name.
             to_token_name[pattern_info] = rule.name
 
+            # Store the terminal token name.
             token_names.add(rule.name)
 
+    # A list of pattern infos that are not the only one for a rule.
     unnamed_pattern_infos = []
 
     for pattern_info in sorted(
@@ -161,19 +99,21 @@ def get_parser_txt(rules, opts, find_odf):
         else:
             is_zfill_len_found = True
 
-    # Map rule name to rule def
+    # Map rule name to rule def.
     to_rule = {}
 
-    # Map rule name to referring rule def
+    # Map rule name to referring rule def.
     to_referring_rules = {}
 
-    # Map rule name to first set
+    # Map rule name to first set.
+    # The set is a set of pattern infos.
     to_first_set = {}
 
-    # First set changed rule names
+    # A set of rule names whose first set have changed.
     changed_rule_names = set()
 
     for rule in rules:
+        # Store the mapping from rule name to rule def.
         to_rule[rule.name] = rule
 
         to_first_set[rule.name] = set()
@@ -189,6 +129,7 @@ def get_parser_txt(rules, opts, find_odf):
 
             referring_rules.add(rule)
 
+    # Calculate rules' first set.
     for rule in rules:
         rule_first_set = rule.calc_first_set(to_first_set)
 
@@ -214,7 +155,9 @@ def get_parser_txt(rules, opts, find_odf):
 
                 changed_rule_names.add(referring_rule.name)
 
-    # Follow set changed rule names
+    # Calculate rules' follow set.
+    #
+    # A set of rule names whose follow set have changed.
     changed_rule_names = {x.name for x in rules}
 
     while True:
@@ -233,6 +176,32 @@ def get_parser_txt(rules, opts, find_odf):
 
         if not changed_rule_names:
             break
+
+    print('# ----- First Set and Follow Set -----')
+
+    to_first_set_token_names = {}
+
+    to_follow_set_token_names = {}
+
+    for rule in rules:
+        rule_first_set = to_first_set[rule.name]
+
+        first_set_token_names = [to_token_name[x] for x in rule_first_set]
+        first_set_token_names.sort()
+
+        to_first_set_token_names[rule.name] = first_set_token_names
+
+        print('# ---- {0} ----\nFIRST: {1}'.format(
+            rule.name,
+            first_set_token_names
+        ))
+
+        follow_set_token_names = [to_token_name[x] for x in rule.get_follow_set()]
+        follow_set_token_names.sort()
+
+        to_follow_set_token_names[rule.name] = follow_set_token_names
+
+        print('FOLLOW: {0}\n'.format(follow_set_token_names))
 
     #
     rule_func_txts = []
@@ -267,6 +236,35 @@ def get_parser_txt(rules, opts, find_odf):
 
     #
     map_ss_key_to_value[SS_ENTRY_RULE] = entry_rule.name
+
+    #
+    import json
+    first_set_mapping_text = json.dumps(
+        to_first_set_token_names,
+        ensure_ascii=False,
+        indent=4,
+        sort_keys=True,
+    )
+
+    first_set_mapping_text = 'TO_FIRST_SET = {0}'.format(
+        first_set_mapping_text
+    )
+
+    map_ss_key_to_value[SS_RULE_FIRST_SET_MAPPING] = first_set_mapping_text
+
+    #
+    follow_set_mapping_text = json.dumps(
+        to_follow_set_token_names,
+        ensure_ascii=False,
+        indent=4,
+        sort_keys=True,
+    )
+
+    follow_set_mapping_text = 'TO_FOLLOW_SET = {0}'.format(
+        follow_set_mapping_text
+    )
+
+    map_ss_key_to_value[SS_RULE_FOLLOW_SET_MAPPING] = follow_set_mapping_text
 
     #
     rule_funcs_txt = '\n\n'.join(rule_func_txts)
@@ -327,8 +325,17 @@ def get_parser_txt(rules, opts, find_odf):
 
     #
     parser_txt = replace_ss_keys(
-        tplt_data, map_ss_key_to_value, find_odf=find_odf
+        tplt_text, map_ss_key_to_value, find_odf=find_odf
     )
+
+    #
+    lines = []
+
+    for line in parser_txt.split('\n'):
+        line = line.rstrip(' \t')
+        lines.append(line)
+
+    parser_txt = '\n'.join(lines)
 
     return parser_txt
 
