@@ -1,8 +1,11 @@
 # coding: utf-8
 from __future__ import absolute_import
 
+import json
+
 from ..util.indent_util import add_indent
 from ..util.path_util import join_file_paths
+from .ast import EMPTY_PATTERN_INFO
 from .ast import Code
 from .ast import ExprSeq
 from .ast import Pattern
@@ -177,8 +180,6 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
         if not changed_rule_names:
             break
 
-    print('# ----- First Set and Follow Set -----')
-
     to_first_set_token_names = {}
 
     to_follow_set_token_names = {}
@@ -186,22 +187,16 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
     for rule in rules:
         rule_first_set = to_first_set[rule.name]
 
-        first_set_token_names = [to_token_name[x] for x in rule_first_set]
+        first_set_token_names = [to_token_name[x] for x in rule_first_set if x != EMPTY_PATTERN_INFO]
+
         first_set_token_names.sort()
 
         to_first_set_token_names[rule.name] = first_set_token_names
-
-        print('# ---- {0} ----\nFIRST: {1}'.format(
-            rule.name,
-            first_set_token_names
-        ))
 
         follow_set_token_names = [to_token_name[x] for x in rule.get_follow_set()]
         follow_set_token_names.sort()
 
         to_follow_set_token_names[rule.name] = follow_set_token_names
-
-        print('FOLLOW: {0}\n'.format(follow_set_token_names))
 
     #
     rule_func_txts = []
@@ -238,7 +233,6 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
     map_ss_key_to_value[SS_ENTRY_RULE] = entry_rule.name
 
     #
-    import json
     first_set_mapping_text = json.dumps(
         to_first_set_token_names,
         ensure_ascii=False,
@@ -285,16 +279,26 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
     #
     reo_txts = []
 
-    for pattern_info, token_name in sorted(
-        to_token_name.items(), key=(lambda x: x[1])
-    ):
+    token_name_to_pattern_info = {}
+
+    for pattern_info, token_name in to_token_name.items():
+        token_name_to_pattern_info[token_name] = pattern_info
+
+    for rule in rules:
+        token_name = rule.name
+
+        pattern_info = token_name_to_pattern_info.get(token_name)
+
+        if pattern_info is None:
+            continue
+
         if pattern_info[1] == u'0':
-            reo_txt = u'\'{0}\': re.compile({1}),'.format(
+            reo_txt = u'(\'{0}\', re.compile({1})),'.format(
                 token_name,
                 pattern_info[0],
             )
         else:
-            reo_txt = u'\'{0}\': re.compile({1}, {2}),'.format(
+            reo_txt = u'(\'{0}\', re.compile({1}, {2})),'.format(
                 token_name,
                 pattern_info[0],
                 pattern_info[1],
@@ -302,7 +306,7 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
 
         reo_txts.append(reo_txt)
 
-    reos_txt = u'_TOKEN_NAME_TO_REGEX_OBJ = {{\n{0}\n}}\n'.format(
+    reos_txt = u'_TOKEN_NAME_TO_REGEX_OBJ = OrderedDict([\n{0}\n])\n'.format(
         add_indent('\n'.join(reo_txts))
     )
     reos_txt = add_indent(reos_txt)

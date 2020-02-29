@@ -11,65 +11,9 @@ all:
 end:
     '$'
 
-args_def:
-    args_sign
-    args_group
-    ```
-pairs = []
-item = args_group
-while 'arg_item' in item:
-    pairs.append(item.arg_item.res)
-    item = item.arg_item
-args = dict(pairs)
-ctx.res = args
-    ```
-
-args_sign:
-    '@'
-
-args_group:
-    brkt_beg (brkt_end | arg_item)
-
-brkt_beg:
-    r'\('
-
-brkt_end:
-    r'\)'
-
-arg_item:
-    arg_expr
-    ```
-ctx.res = arg_expr.res
-ctx.par.arg_item = ctx
-    ```
-    (brkt_end | arg_sep (brkt_end | arg_item))
-
-arg_expr:
-    arg_key
-    arg_kvsep
-    arg_val
-    `ctx.res = (arg_key.res, arg_val.res)`
-
-arg_key:
-    '[a-zA-Z_][a-zA-Z0-9_]*'
-    `ctx.res = arg_key.res.group()`
-
-arg_kvsep:
-    '='
-
-arg_val:
-    lit_val
-    `ctx.res = lit_val.res`
-
-lit_val:
-    lit_str `ctx.res = lit_str.res`
-    | lit_num `ctx.res = lit_num.res`
-    | lit_bool `ctx.res = lit_bool.res`
-    | lit_none `ctx.res = lit_none.res`
-
 lit_str:
     'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
-    `ctx.res = eval(lit_str.res.group())`
+    `ctx.res = lit_str.res`
 
 lit_num:
     r"""
@@ -89,8 +33,89 @@ lit_none:
     'None(?![a-zA-Z0-9_])'
     `ctx.res = None`
 
-arg_sep:
+rule_name:
+    r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=:)'
+    `ctx.res = rule_name.res`
+
+name:
+    r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!:)'
+    `ctx.res = name.res`
+
+at_sign:
+    '@'
+
+comma:
     ','
+
+equal_sign:
+    '='
+
+brkt_beg:
+    r'\('
+
+brkt_end:
+    r'\)'
+
+colon:
+    ':'
+
+pipe_sign:
+    r'\|'
+
+sqrbrkt_beg:
+    r'\['
+
+sqrbrkt_end:
+    r'\]'
+
+occ01_trailer:
+    r'\?'
+
+occ0m_trailer:
+    r'\*'
+
+occ1m_trailer:
+    r'\+'
+
+args_def:
+    at_sign
+    args_group
+    ```
+pairs = []
+item = args_group
+while 'arg_item' in item:
+    pairs.append(item.arg_item.res)
+    item = item.arg_item
+args = dict(pairs)
+ctx.res = args
+    ```
+
+args_group:
+    brkt_beg (brkt_end | arg_item)
+
+arg_item:
+    arg_expr
+    ```
+ctx.res = arg_expr.res
+ctx.par.arg_item = ctx
+    ```
+    (brkt_end | comma (brkt_end | arg_item))
+
+arg_expr:
+    name
+    equal_sign
+    arg_val
+    `ctx.res = (name.res.group(), arg_val.res)`
+
+arg_val:
+    lit_val
+    `ctx.res = lit_val.res`
+
+lit_val:
+    lit_str `ctx.res = eval(lit_str.res.group())`
+    | lit_num `ctx.res = lit_num.res`
+    | lit_bool `ctx.res = lit_bool.res`
+    | lit_none `ctx.res = lit_none.res`
 
 rule_seq:
     `ctx.res = []`
@@ -100,32 +125,22 @@ rule_seq:
 
 rule_def:
     rule_name
-    rule_colon
+    colon
     `args = None`
     (args_def
     `args = args_def.res`
     )?
     or_expr
-    `ctx.res = RuleDef(name=rule_name.res, item=or_expr.res, args=args)`
-
-rule_name:
-    '[a-zA-Z_][a-zA-Z0-9_]*'
-    `ctx.res = rule_name.res.group()`
-
-rule_colon:
-    ':'
+    `ctx.res = RuleDef(name=rule_name.res.group(), item=or_expr.res, args=args)`
 
 or_expr:
     seq_expr
     `items = [seq_expr.res]`
-    (or_expr_op
+    (pipe_sign
     seq_expr
     `items.append(seq_expr.res)`
     )*
     `ctx.res = ExprOr(items) if len(items) > 1 else items[0]`
-
-or_expr_op:
-    r'\|'
 
 seq_expr:
     `items = []`
@@ -206,41 +221,19 @@ else:
     ctx.res = ExprOcc01(item)
     ```
 
-sqrbrkt_beg:
-    r'\['
-
-sqrbrkt_end:
-    r'\]'
-
-occ01_trailer:
-    r'\?'
-
-occ0m_trailer:
-    r'\*'
-
-occ1m_trailer:
-    r'\+'
-
 atom:
-    regex_str
+    lit_str
     `args = None`
     (args_def
     `args = args_def.res`
     )?
-    `ctx.res = Pattern(regex_str.res, args=args)`
-    | rule_ref `ctx.res = rule_ref.res`
-    | group `ctx.res = group.res`
-
-regex_str:
-    'r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)'
-    `ctx.res = regex_str.res.group()`
-
-rule_ref:
-    r'([a-zA-Z_][a-zA-Z0-9_]*)(?![a-zA-Z0-9_])[\s]*(?![:])'
-    ```
-name = rule_ref.res.group(1)
-ctx.res = RuleRef(name)
-    ```
+    `ctx.res = Pattern(lit_str.res.group(), args=args)`
+    |
+    name
+    `ctx.res = RuleRef(name.res.group())`
+    |
+    group
+    `ctx.res = group.res`
 
 group:
     brkt_beg
