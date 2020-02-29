@@ -1,24 +1,27 @@
 def _push_state(self):
     self._state_stack.append({
-        self._SK_TXT: self._txt,
+        self._SK_POS: self._pos,
         self._SK_ROW: self._row,
         self._SK_COL: self._col,
+        self._SK_TOK_IDX: self._token_index,
         self._SK_OCC: 0,
     })
 
 
 def _pop_state(self):
     res = self._state_stack.pop()
-    self._txt = res[self._SK_TXT]
+    self._pos = res[self._SK_POS]
     self._row = res[self._SK_ROW]
     self._col = res[self._SK_COL]
+    self._token_index = res[self._SK_TOK_IDX]
     return res
 
 
 def _save_state(self):
-    self._state_stack[-1][self._SK_TXT] = self._txt
+    self._state_stack[-1][self._SK_POS] = self._pos
     self._state_stack[-1][self._SK_ROW] = self._row
     self._state_stack[-1][self._SK_COL] = self._col
+    self._state_stack[-1][self._SK_TOK_IDX] = self._token_index
     self._state_stack[-1][self._SK_OCC] += 1
 
 
