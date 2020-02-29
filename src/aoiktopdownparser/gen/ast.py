@@ -126,7 +126,10 @@ class Code(AstNode):
     def __init__(self, code):
         super(Code, self).__init__()
 
-        self.code = code.strip()
+        self.code = code.rstrip()
+
+        if self.code.startswith('\n'):
+            self.code = self.code[1:]
 
     def get_pattern_infos(self):
         return set()
@@ -145,6 +148,8 @@ class Code(AstNode):
 
     def gen(self, to_token_name, to_first_set, opts, **kwargs):
         res = self.code
+
+        res = add_indent(res, 0)
 
         code_prf = opts.get(GS_CODE_PRF, GS_CODE_PRF_V_DFT)
 
