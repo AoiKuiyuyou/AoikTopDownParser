@@ -235,30 +235,30 @@ class Parser(object):
 
     _TOKEN_NAME_TO_REGEX_OBJ = OrderedDict([
         ('end', re.compile('$')),
-        ('lit_str', re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)')),
-        ('lit_num', re.compile(r"""
+        ('comma', re.compile(',')),
+        ('colon', re.compile(':')),
+        ('equal_sign', re.compile('=')),
+        ('at_sign', re.compile('@')),
+        ('pipe_sign', re.compile(r'\|')),
+        ('parenthesis_start', re.compile(r'\(')),
+        ('parenthesis_end', re.compile(r'\)')),
+        ('bracket_start', re.compile(r'\[')),
+        ('bracket_end', re.compile(r'\]')),
+        ('occ01_trailer', re.compile(r'\?')),
+        ('occ0m_trailer', re.compile(r'\*')),
+        ('occ1m_trailer', re.compile(r'\+')),
+        ('none', re.compile('None(?![a-zA-Z0-9_])')),
+        ('boolean', re.compile('(True|False)(?![a-zA-Z0-9_])')),
+        ('number', re.compile(r"""
         ([-+])?         # Sign
         (?=\d|[.]\d)    # Next is an integer part or a fraction part
         (\d*)           # Integer part
         ([.]\d*)?       # Fraction part
         (e[-+]?\d+)?    # Exponent part
         """, re.VERBOSE | re.IGNORECASE)),
-        ('lit_bool', re.compile('(True|False)(?![a-zA-Z0-9_])')),
-        ('lit_none', re.compile('None(?![a-zA-Z0-9_])')),
+        ('string', re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)')),
         ('rule_name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=:)')),
         ('name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!:)')),
-        ('at_sign', re.compile('@')),
-        ('comma', re.compile(',')),
-        ('equal_sign', re.compile('=')),
-        ('brkt_beg', re.compile(r'\(')),
-        ('brkt_end', re.compile(r'\)')),
-        ('colon', re.compile(':')),
-        ('pipe_sign', re.compile(r'\|')),
-        ('sqrbrkt_beg', re.compile(r'\[')),
-        ('sqrbrkt_end', re.compile(r'\]')),
-        ('occ01_trailer', re.compile(r'\?')),
-        ('occ0m_trailer', re.compile(r'\*')),
-        ('occ1m_trailer', re.compile(r'\+')),
         ('code', re.compile(r'(`+)((?:.|\n)*?)\1')),
     ])
 
@@ -682,38 +682,102 @@ class Parser(object):
             # ```
             ctx.opts = args_def.res
             # ```
-        rule_seq = self._scan_rule('rule_seq')  # noqa
+        rule_defs = self._scan_rule('rule_defs')  # noqa
         # ```
-        ctx.rule_defs = rule_seq.res
+        ctx.rule_defs = rule_defs.res
         # ```
         end = self._scan_rule('end')  # noqa
 
     def end(self, ctx):
         end = self._scan_token('end')  # noqa
 
-    def lit_str(self, ctx):
-        lit_str = self._scan_token('lit_str')  # noqa
-        # ```
-        ctx.res = lit_str.res
-        # ```
+    def comma(self, ctx):
+        comma = self._scan_token('comma')  # noqa
 
-    def lit_num(self, ctx):
-        lit_num = self._scan_token('lit_num')  # noqa
-        # ```
-        ctx.res = eval(lit_num.res.txt)
-        # ```
+    def colon(self, ctx):
+        colon = self._scan_token('colon')  # noqa
 
-    def lit_bool(self, ctx):
-        lit_bool = self._scan_token('lit_bool')  # noqa
-        # ```
-        ctx.res = True if (lit_bool.res.txt == 'True') else False
-        # ```
+    def equal_sign(self, ctx):
+        equal_sign = self._scan_token('equal_sign')  # noqa
 
-    def lit_none(self, ctx):
-        lit_none = self._scan_token('lit_none')  # noqa
+    def at_sign(self, ctx):
+        at_sign = self._scan_token('at_sign')  # noqa
+
+    def pipe_sign(self, ctx):
+        pipe_sign = self._scan_token('pipe_sign')  # noqa
+
+    def parenthesis_start(self, ctx):
+        parenthesis_start = self._scan_token('parenthesis_start')  # noqa
+
+    def parenthesis_end(self, ctx):
+        parenthesis_end = self._scan_token('parenthesis_end')  # noqa
+
+    def bracket_start(self, ctx):
+        bracket_start = self._scan_token('bracket_start')  # noqa
+
+    def bracket_end(self, ctx):
+        bracket_end = self._scan_token('bracket_end')  # noqa
+
+    def occ01_trailer(self, ctx):
+        occ01_trailer = self._scan_token('occ01_trailer')  # noqa
+
+    def occ0m_trailer(self, ctx):
+        occ0m_trailer = self._scan_token('occ0m_trailer')  # noqa
+
+    def occ1m_trailer(self, ctx):
+        occ1m_trailer = self._scan_token('occ1m_trailer')  # noqa
+
+    def none(self, ctx):
+        none = self._scan_token('none')  # noqa
         # ```
         ctx.res = None
         # ```
+
+    def boolean(self, ctx):
+        boolean = self._scan_token('boolean')  # noqa
+        # ```
+        ctx.res = True if (boolean.res.txt == 'True') else False
+        # ```
+
+    def number(self, ctx):
+        number = self._scan_token('number')  # noqa
+        # ```
+        ctx.res = eval(number.res.txt)
+        # ```
+
+    def string(self, ctx):
+        string = self._scan_token('string')  # noqa
+        # ```
+        ctx.res = string.res
+        # ```
+
+    def literal(self, ctx):
+        if self._peek(['none']):
+            none = self._scan_rule('none')  # noqa
+            # ```
+            ctx.res = none.res
+            # ```
+        elif self._peek(['boolean'], is_branch=True):
+            boolean = self._scan_rule('boolean')  # noqa
+            # ```
+            ctx.res = boolean.res
+            # ```
+        elif self._peek(['number'], is_branch=True):
+            number = self._scan_rule('number')  # noqa
+            # ```
+            ctx.res = number.res
+            # ```
+        elif self._peek(['string'], is_branch=True):
+            string = self._scan_rule('string')  # noqa
+            # ```
+            ctx.res = eval(string.res.txt)
+            # ```
+        else:
+            self._error([
+            'number',
+            'string',
+            'boolean',
+            'none'])
 
     def rule_name(self, ctx):
         rule_name = self._scan_token('rule_name')  # noqa
@@ -727,132 +791,61 @@ class Parser(object):
         ctx.res = name.res
         # ```
 
-    def at_sign(self, ctx):
-        at_sign = self._scan_token('at_sign')  # noqa
-
-    def comma(self, ctx):
-        comma = self._scan_token('comma')  # noqa
-
-    def equal_sign(self, ctx):
-        equal_sign = self._scan_token('equal_sign')  # noqa
-
-    def brkt_beg(self, ctx):
-        brkt_beg = self._scan_token('brkt_beg')  # noqa
-
-    def brkt_end(self, ctx):
-        brkt_end = self._scan_token('brkt_end')  # noqa
-
-    def colon(self, ctx):
-        colon = self._scan_token('colon')  # noqa
-
-    def pipe_sign(self, ctx):
-        pipe_sign = self._scan_token('pipe_sign')  # noqa
-
-    def sqrbrkt_beg(self, ctx):
-        sqrbrkt_beg = self._scan_token('sqrbrkt_beg')  # noqa
-
-    def sqrbrkt_end(self, ctx):
-        sqrbrkt_end = self._scan_token('sqrbrkt_end')  # noqa
-
-    def occ01_trailer(self, ctx):
-        occ01_trailer = self._scan_token('occ01_trailer')  # noqa
-
-    def occ0m_trailer(self, ctx):
-        occ0m_trailer = self._scan_token('occ0m_trailer')  # noqa
-
-    def occ1m_trailer(self, ctx):
-        occ1m_trailer = self._scan_token('occ1m_trailer')  # noqa
-
     def args_def(self, ctx):
         at_sign = self._scan_rule('at_sign')  # noqa
-        args_group = self._scan_rule('args_group')  # noqa
+        args_list = self._scan_rule('args_list')  # noqa
         # ```
-        pairs = []
-        item = args_group
-        while 'arg_item' in item:
-            pairs.append(item.arg_item.res)
-            item = item.arg_item
-        args = dict(pairs)
-        ctx.res = args
+        ctx.res = dict(args_list.res)
         # ```
 
-    def args_group(self, ctx):
-        brkt_beg = self._scan_rule('brkt_beg')  # noqa
-        if self._peek(['brkt_end']):
-            brkt_end = self._scan_rule('brkt_end')  # noqa
+    def args_list(self, ctx):
+        # ```
+        ctx.res = []
+        # ```
+        parenthesis_start = self._scan_rule('parenthesis_start')  # noqa
+        if self._peek(['parenthesis_end']):
+            parenthesis_end = self._scan_rule('parenthesis_end')  # noqa
         elif self._peek(['name'], is_branch=True):
-            arg_item = self._scan_rule('arg_item')  # noqa
+            args_list_item = self._scan_rule('args_list_item')  # noqa
         else:
             self._error([
             'name',
-            'brkt_end'])
+            'parenthesis_end'])
 
-    def arg_item(self, ctx):
+    def args_list_item(self, ctx):
+        # ```
+        ctx.res = ctx.par.res
+        # ```
         arg_expr = self._scan_rule('arg_expr')  # noqa
         # ```
-        ctx.res = arg_expr.res
-        ctx.par.arg_item = ctx
+        ctx.res.append(arg_expr.res)
         # ```
-        if self._peek(['brkt_end']):
-            brkt_end = self._scan_rule('brkt_end')  # noqa
+        if self._peek(['parenthesis_end']):
+            parenthesis_end = self._scan_rule('parenthesis_end')  # noqa
         elif self._peek(['comma'], is_branch=True):
             comma = self._scan_rule('comma')  # noqa
-            if self._peek(['brkt_end']):
-                brkt_end = self._scan_rule('brkt_end')  # noqa
+            if self._peek(['parenthesis_end']):
+                parenthesis_end = self._scan_rule('parenthesis_end')  # noqa
             elif self._peek(['name'], is_branch=True):
-                arg_item = self._scan_rule('arg_item')  # noqa
+                args_list_item = self._scan_rule('args_list_item')  # noqa
             else:
                 self._error([
                 'name',
-                'brkt_end'])
+                'parenthesis_end'])
         else:
             self._error([
-            'brkt_end',
+            'parenthesis_end',
             'comma'])
 
     def arg_expr(self, ctx):
         name = self._scan_rule('name')  # noqa
         equal_sign = self._scan_rule('equal_sign')  # noqa
-        arg_val = self._scan_rule('arg_val')  # noqa
+        literal = self._scan_rule('literal')  # noqa
         # ```
-        ctx.res = (name.res.txt, arg_val.res)
-        # ```
-
-    def arg_val(self, ctx):
-        lit_val = self._scan_rule('lit_val')  # noqa
-        # ```
-        ctx.res = lit_val.res
+        ctx.res = (name.res.txt, literal.res)
         # ```
 
-    def lit_val(self, ctx):
-        if self._peek(['lit_str']):
-            lit_str = self._scan_rule('lit_str')  # noqa
-            # ```
-            ctx.res = eval(lit_str.res.txt)
-            # ```
-        elif self._peek(['lit_num'], is_branch=True):
-            lit_num = self._scan_rule('lit_num')  # noqa
-            # ```
-            ctx.res = lit_num.res
-            # ```
-        elif self._peek(['lit_bool'], is_branch=True):
-            lit_bool = self._scan_rule('lit_bool')  # noqa
-            # ```
-            ctx.res = lit_bool.res
-            # ```
-        elif self._peek(['lit_none'], is_branch=True):
-            lit_none = self._scan_rule('lit_none')  # noqa
-            # ```
-            ctx.res = lit_none.res
-            # ```
-        else:
-            self._error([
-            'lit_num',
-            'lit_str',
-            'lit_bool',
-            'lit_none'])
-
-    def rule_seq(self, ctx):
+    def rule_defs(self, ctx):
         # ```
         ctx.res = []
         # ```
@@ -875,11 +868,11 @@ class Parser(object):
         # ```
         if self._peek([
             'at_sign',
-            'lit_str',
+            'string',
             'name',
             'code',
-            'brkt_beg',
-            'sqrbrkt_beg'],
+            'parenthesis_start',
+            'bracket_start'],
             is_required=True) == 'at_sign':
             args_def = self._scan_rule('args_def')  # noqa
             # ```
@@ -887,7 +880,11 @@ class Parser(object):
             # ```
         or_expr = self._scan_rule('or_expr')  # noqa
         # ```
-        ctx.res = RuleDef(name=rule_name.res.txt, item=or_expr.res, args=args)
+        ctx.res = RuleDef(
+            name=rule_name.res.txt,
+            item=or_expr.res,
+            args=args,
+        )
         # ```
 
     def or_expr(self, ctx):
@@ -898,8 +895,8 @@ class Parser(object):
         while self._peek([
             'pipe_sign',
             'rule_name',
-            'brkt_end',
-            'sqrbrkt_end',
+            'parenthesis_end',
+            'bracket_end',
             'end'],
             is_required=True) == 'pipe_sign':
             pipe_sign = self._scan_rule('pipe_sign')  # noqa
@@ -918,10 +915,10 @@ class Parser(object):
         while True:
             while self._peek([
                 'code',
-                'lit_str',
+                'string',
                 'name',
-                'brkt_beg',
-                'sqrbrkt_beg'],
+                'parenthesis_start',
+                'bracket_start'],
                 is_required=True) == 'code':
                 code = self._scan_rule('code')  # noqa
                 # ```
@@ -933,13 +930,13 @@ class Parser(object):
             # ```
             while self._peek([
                 'code',
-                'lit_str',
+                'string',
                 'name',
                 'rule_name',
-                'brkt_beg',
-                'brkt_end',
-                'sqrbrkt_beg',
-                'sqrbrkt_end',
+                'parenthesis_start',
+                'parenthesis_end',
+                'bracket_start',
+                'bracket_end',
                 'pipe_sign',
                 'end'],
                 is_required=True) == 'code':
@@ -948,22 +945,22 @@ class Parser(object):
                 items.append(code.res)
                 # ```
             if self._peek([
-                'lit_str',
+                'string',
                 'name',
                 'code',
-                'brkt_beg',
-                'sqrbrkt_beg',
+                'parenthesis_start',
+                'bracket_start',
                 'rule_name',
-                'brkt_end',
-                'sqrbrkt_end',
+                'parenthesis_end',
+                'bracket_end',
                 'pipe_sign',
                 'end'],
                 is_required=True) not in [
-                'lit_str',
+                'string',
                 'name',
                 'code',
-                'brkt_beg',
-                'sqrbrkt_beg']:
+                'parenthesis_start',
+                'bracket_start']:
                 break
         # ```
         ctx.res = ExprSeq(items) if len(items) > 1 else items[0]
@@ -976,15 +973,15 @@ class Parser(object):
         # ```
 
     def occ_expr(self, ctx):
-        if self._peek(['sqrbrkt_beg']):
+        if self._peek(['bracket_start']):
             occ01_group = self._scan_rule('occ01_group')  # noqa
             # ```
             ctx.res = occ01_group.res
             # ```
         elif self._peek([
-            'lit_str',
+            'string',
             'name',
-            'brkt_beg'], is_branch=True):
+            'parenthesis_start'], is_branch=True):
             atom = self._scan_rule('atom')  # noqa
             # ```
             occ_type = None
@@ -993,14 +990,14 @@ class Parser(object):
                 'occ0m_trailer',
                 'occ1m_trailer',
                 'occ01_trailer',
-                'lit_str',
+                'string',
                 'name',
                 'rule_name',
                 'code',
-                'brkt_beg',
-                'brkt_end',
-                'sqrbrkt_beg',
-                'sqrbrkt_end',
+                'parenthesis_start',
+                'parenthesis_end',
+                'bracket_start',
+                'bracket_end',
                 'pipe_sign',
                 'end'],
                 is_required=True) in [
@@ -1062,19 +1059,19 @@ class Parser(object):
                 else:
                     ctx.res = ExprOcc1m(item)
             else:
-                assert 0
+                raise ValueError(occ_type)
             # ```
         else:
             self._error([
-            'lit_str',
+            'string',
             'name',
-            'brkt_beg',
-            'sqrbrkt_beg'])
+            'parenthesis_start',
+            'bracket_start'])
 
     def occ01_group(self, ctx):
-        sqrbrkt_beg = self._scan_rule('sqrbrkt_beg')  # noqa
+        bracket_start = self._scan_rule('bracket_start')  # noqa
         or_expr = self._scan_rule('or_expr')  # noqa
-        sqrbrkt_end = self._scan_rule('sqrbrkt_end')  # noqa
+        bracket_end = self._scan_rule('bracket_end')  # noqa
         # ```
         item = or_expr.res
 
@@ -1090,24 +1087,24 @@ class Parser(object):
         # ```
 
     def atom(self, ctx):
-        if self._peek(['lit_str']):
-            lit_str = self._scan_rule('lit_str')  # noqa
+        if self._peek(['string']):
+            string = self._scan_rule('string')  # noqa
             # ```
             args = None
             # ```
             if self._peek([
                 'at_sign',
-                'lit_str',
+                'string',
                 'name',
                 'rule_name',
                 'code',
-                'brkt_beg',
-                'brkt_end',
+                'parenthesis_start',
+                'parenthesis_end',
                 'occ0m_trailer',
                 'occ1m_trailer',
                 'occ01_trailer',
-                'sqrbrkt_beg',
-                'sqrbrkt_end',
+                'bracket_start',
+                'bracket_end',
                 'pipe_sign',
                 'end'],
                 is_required=True) == 'at_sign':
@@ -1116,28 +1113,28 @@ class Parser(object):
                 args = args_def.res
                 # ```
             # ```
-            ctx.res = Pattern(lit_str.res.txt, args=args)
+            ctx.res = Pattern(string.res.txt, args=args)
             # ```
         elif self._peek(['name'], is_branch=True):
             name = self._scan_rule('name')  # noqa
             # ```
             ctx.res = RuleRef(name.res.txt)
             # ```
-        elif self._peek(['brkt_beg'], is_branch=True):
+        elif self._peek(['parenthesis_start'], is_branch=True):
             group = self._scan_rule('group')  # noqa
             # ```
             ctx.res = group.res
             # ```
         else:
             self._error([
-            'lit_str',
+            'string',
             'name',
-            'brkt_beg'])
+            'parenthesis_start'])
 
     def group(self, ctx):
-        brkt_beg = self._scan_rule('brkt_beg')  # noqa
+        parenthesis_start = self._scan_rule('parenthesis_start')  # noqa
         or_expr = self._scan_rule('or_expr')  # noqa
-        brkt_end = self._scan_rule('brkt_end')  # noqa
+        parenthesis_end = self._scan_rule('parenthesis_end')  # noqa
         # ```
         ctx.res = or_expr.res
         # ```
