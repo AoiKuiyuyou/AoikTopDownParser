@@ -113,7 +113,7 @@ class Pattern(AstNode):
     def gen(self, to_token_name, to_first_set, opts, **kwargs):
         name = kwargs.get('name', None)
 
-        res = '{res_name} = self._scan_token(\'{token_name}\')'.format(
+        res = '{res_name} = self._scan_token(\'{token_name}\')  # noqa'.format(
             res_name=name or '_',
             token_name=to_token_name[(self.pattern, self.flags_str)],
         )
@@ -314,7 +314,7 @@ class RuleRef(AstNode):
             rule_def.is_follow_set_changed = new_set_count != old_set_count
 
     def gen(self, to_token_name, to_first_set, opts, **kwargs):
-        res = "{name} = self._scan_rule('{name}')".format(
+        res = "{name} = self._scan_rule('{name}')  # noqa".format(
             name=self.name,
         )
 
