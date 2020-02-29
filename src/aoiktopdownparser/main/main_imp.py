@@ -24,17 +24,14 @@ from ..gen.parser import parsing_error_to_msg
 from .argpsr import ensure_args_spec
 from .argpsr import parser_make
 from .argpsr_const import ARG_BACKTRACKING_K
-from .argpsr_const import ARG_DEBUG_K
 from .argpsr_const import ARG_ENTRY_RULE_URI_K
 from .argpsr_const import ARG_EXT_OPTS_URI_K
 from .argpsr_const import ARG_GEN_PSR_DEBUG_K
 from .argpsr_const import ARG_PSR_FILE_PATH_C
 from .argpsr_const import ARG_PSR_FILE_PATH_K
 from .argpsr_const import ARG_RULES_FILE_PATH_K
-from .argpsr_const import ARG_RULES_OBJ_URI_K
 from .argpsr_const import ARG_RULES_PSR_DEBUG_K
 from .argpsr_const import ARG_SRC_FILE_PATH_K
-from .argpsr_const import ARG_SRC_OBJ_URI_K
 from .argpsr_const import ARG_TPLT_FILE_PATH_K
 from .argpsr_const import ARG_VER_ON_K
 from .main_const import MAIN_RET_V_EXT_OPTS_LOAD_ERR
@@ -43,12 +40,8 @@ from .main_const import MAIN_RET_V_PSR_CODE_LOAD_ERR
 from .main_const import MAIN_RET_V_PSR_CODE_WRITE_FILE_ERR
 from .main_const import MAIN_RET_V_PSR_TPLT_FILE_READ_ERR
 from .main_const import MAIN_RET_V_RULES_FILE_READ_ERR
-from .main_const import MAIN_RET_V_RULES_OBJ_LOAD_ERR
-from .main_const import MAIN_RET_V_RULES_OBJ_NOT_STR_ERR
 from .main_const import MAIN_RET_V_RULES_PARSE_ERR
 from .main_const import MAIN_RET_V_SRC_FILE_READ_ERR
-from .main_const import MAIN_RET_V_SRC_OBJ_LOAD_ERR
-from .main_const import MAIN_RET_V_SRC_OBJ_NOT_STR_ERR
 from .main_const import MAIN_RET_V_TPLT_FILE_READ_ERR
 
 
@@ -76,11 +69,9 @@ def main_imp(args=None):
 
         return 0
 
-    debug_on = getattr(args_obj, ARG_DEBUG_K)
+    debug_on = True
 
     rules_file_path = getattr(args_obj, ARG_RULES_FILE_PATH_K)
-
-    rules_obj_uri = getattr(args_obj, ARG_RULES_OBJ_URI_K)
 
     if rules_file_path is not None:
         try:
@@ -96,34 +87,6 @@ def main_imp(args=None):
                 sys.stderr.write('---\n{}---\n'.format(format_exc()))
 
             return MAIN_RET_V_RULES_FILE_READ_ERR
-
-    elif rules_obj_uri is not None:
-        try:
-            rules_mod, rules_txt = import_obj(
-                rules_obj_uri,
-                mod_name='aoiktopdownparser._tmpmod_rules',
-                retn_mod=True,
-            )
-        except Exception:
-            msg = '# Error\nFailed loading rule spec object.\n'\
-                'Object URI is `{}`.\n'\
-                .format(rules_obj_uri)
-
-            sys.stderr.write(msg)
-
-            if debug_on:
-                sys.stderr.write('---\n{}---\n'.format(format_exc()))
-
-            return MAIN_RET_V_RULES_OBJ_LOAD_ERR
-
-        if not isinstance(rules_txt, str):
-            msg = '# Error\nRules data object is not string.\n'\
-                'Object URI is `{}`.\n'\
-                .format(rules_obj_uri)
-
-            sys.stderr.write(msg)
-
-            return MAIN_RET_V_RULES_OBJ_NOT_STR_ERR
     else:
         assert 0
 
@@ -247,8 +210,6 @@ def main_imp(args=None):
         ext_opts_mod=ext_opts_mod if ext_opts_uri is not None else None,
         ext_opts=ext_opts,
         rules_file_path=rules_file_path,
-        rules_obj_uri=rules_obj_uri,
-        rules_mod=rules_mod if rules_obj_uri is not None else None,
     )
 
     try:
@@ -306,8 +267,6 @@ def main_imp(args=None):
 
     src_file_path = getattr(args_obj, ARG_SRC_FILE_PATH_K)
 
-    src_obj_uri = getattr(args_obj, ARG_SRC_OBJ_URI_K)
-
     src_txt = None
 
     if src_file_path is not None:
@@ -326,30 +285,6 @@ def main_imp(args=None):
                 sys.stderr.write('---\n{}---\n'.format(format_exc()))
 
             return MAIN_RET_V_SRC_FILE_READ_ERR
-
-    elif src_obj_uri is not None:
-        try:
-            src_txt = import_obj(src_obj_uri)
-        except Exception:
-            msg = '# Error\nFailed loading source data object.\n'\
-                + 'Object URI is `{}`.\n'\
-                .format(src_obj_uri)
-
-            sys.stderr.write(msg)
-
-            if debug_on:
-                sys.stderr.write('---\n{}---\n'.format(format_exc()))
-
-            return MAIN_RET_V_SRC_OBJ_LOAD_ERR
-
-        if not isinstance(src_txt, str):
-            msg = '# Error\nSource data object is not string.\n'\
-                'Object URI is `{}`.\n'\
-                .format(src_obj_uri)
-
-            sys.stderr.write(msg)
-
-            return MAIN_RET_V_SRC_OBJ_NOT_STR_ERR
     else:
         assert 0
 
@@ -422,8 +357,6 @@ def find_odf_v2(
     ext_opts_mod,
     ext_opts,
     rules_file_path,
-    rules_obj_uri,
-    rules_mod,
     opt_dft=None,
 ):
     # Find the file that defines given option.
@@ -448,17 +381,6 @@ def find_odf_v2(
         if opt_val is not opt_dft:
             if rules_file_path is not None:
                 odf = rules_file_path
-            elif rules_obj_uri is not None:
-                uri_parts = split_uri(rules_obj_uri)
-
-                protocol = uri_parts[0]
-
-                if protocol == 'py':
-                    odf = rules_mod.__file__
-                elif protocol == 'file':
-                    odf = uri_parts[1]
-                else:
-                    odf = None
             else:
                 assert 0
 
