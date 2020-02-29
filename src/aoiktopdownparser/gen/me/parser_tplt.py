@@ -9,15 +9,15 @@ import re
 import sys
 from traceback import format_exception
 
+from aoiktopdownparser.gen.ast import AltExpr
 from aoiktopdownparser.gen.ast import Code
-from aoiktopdownparser.gen.ast import ExprOcc0m
-from aoiktopdownparser.gen.ast import ExprOcc01
-from aoiktopdownparser.gen.ast import ExprOcc1m
-from aoiktopdownparser.gen.ast import ExprOr
-from aoiktopdownparser.gen.ast import ExprSeq
+from aoiktopdownparser.gen.ast import Occ0mExpr
+from aoiktopdownparser.gen.ast import Occ01Expr
+from aoiktopdownparser.gen.ast import Occ1mExpr
 from aoiktopdownparser.gen.ast import Pattern
 from aoiktopdownparser.gen.ast import RuleDef
 from aoiktopdownparser.gen.ast import RuleRef
+from aoiktopdownparser.gen.ast import SeqExpr
 
 
 class AttrDict(dict):

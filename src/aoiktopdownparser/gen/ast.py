@@ -223,7 +223,7 @@ class RuleDef(AstNode):
         else:
             single_pattern_item = None
 
-            if isinstance(self.item, ExprSeq):
+            if isinstance(self.item, SeqExpr):
                 seq_txts = []
 
                 for item in self.item.items:
@@ -321,10 +321,10 @@ class RuleRef(AstNode):
         return res
 
 
-class ExprSeq(AstNode):
+class SeqExpr(AstNode):
 
     def __init__(self, items):
-        super(ExprSeq, self).__init__()
+        super(SeqExpr, self).__init__()
 
         assert len(items) > 1
         self.items = items
@@ -412,10 +412,10 @@ class ExprSeq(AstNode):
         return res
 
 
-class ExprOr(AstNode):
+class AltExpr(AstNode):
 
     def __init__(self, items):
-        super(ExprOr, self).__init__()
+        super(AltExpr, self).__init__()
 
         assert len(items) > 1
         self.items = items
@@ -611,10 +611,10 @@ class ExprOr(AstNode):
         return res
 
 
-class ExprOcc01(AstNode):
+class Occ01Expr(AstNode):
 
     def __init__(self, item):
-        super(ExprOcc01, self).__init__()
+        super(Occ01Expr, self).__init__()
 
         self.item = item
 
@@ -670,14 +670,14 @@ class ExprOcc01(AstNode):
             is_in_expror = kwargs.get('is_in_expror', False)
 
             if is_in_expror:
-                # The parent ExprOr item already generated the if test, so no
-                # need to generate the ExprOcc01 item's if test.
+                # The parent AltExpr item already generated the if test, so no
+                # need to generate the Occ01Expr item's if test.
                 #
                 # Note this reduction is allowed with the requirement that the
-                # ExprOcc01 item and the child item have the same follow set,
-                # and that the parent ExprOr item will peek the first set and
-                # follow set for a nullable item such as ExprOcc01, just as an
-                # ExprOcc01 item will do.
+                # Occ01Expr item and the child item have the same follow set,
+                # and that the parent AltExpr item will peek the first set and
+                # follow set for a nullable item such as Occ01Expr, just as an
+                # Occ01Expr item will do.
                 #
                 item_txt = self.item.gen(
                     to_token_name,
@@ -731,10 +731,10 @@ class ExprOcc01(AstNode):
         return res
 
 
-class ExprOcc0m(AstNode):
+class Occ0mExpr(AstNode):
 
     def __init__(self, item):
-        super(ExprOcc0m, self).__init__()
+        super(Occ0mExpr, self).__init__()
 
         self.item = item
 
@@ -822,10 +822,10 @@ class ExprOcc0m(AstNode):
         return res
 
 
-class ExprOcc1m(AstNode):
+class Occ1mExpr(AstNode):
 
     def __init__(self, item):
-        super(ExprOcc1m, self).__init__()
+        super(Occ1mExpr, self).__init__()
 
         self.item = item
 

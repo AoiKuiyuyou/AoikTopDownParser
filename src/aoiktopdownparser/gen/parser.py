@@ -9,15 +9,15 @@ import re
 import sys
 from traceback import format_exception
 
+from aoiktopdownparser.gen.ast import AltExpr
 from aoiktopdownparser.gen.ast import Code
-from aoiktopdownparser.gen.ast import ExprOcc0m
-from aoiktopdownparser.gen.ast import ExprOcc01
-from aoiktopdownparser.gen.ast import ExprOcc1m
-from aoiktopdownparser.gen.ast import ExprOr
-from aoiktopdownparser.gen.ast import ExprSeq
+from aoiktopdownparser.gen.ast import Occ0mExpr
+from aoiktopdownparser.gen.ast import Occ01Expr
+from aoiktopdownparser.gen.ast import Occ1mExpr
 from aoiktopdownparser.gen.ast import Pattern
 from aoiktopdownparser.gen.ast import RuleDef
 from aoiktopdownparser.gen.ast import RuleRef
+from aoiktopdownparser.gen.ast import SeqExpr
 
 
 class AttrDict(dict):
@@ -905,7 +905,7 @@ class Parser(object):
             items.append(seq_expr.res)
             # ```
         # ```
-        ctx.res = ExprOr(items) if len(items) > 1 else items[0]
+        ctx.res = AltExpr(items) if len(items) > 1 else items[0]
         # ```
 
     def seq_expr(self, ctx):
@@ -963,7 +963,7 @@ class Parser(object):
                 'bracket_start']:
                 break
         # ```
-        ctx.res = ExprSeq(items) if len(items) > 1 else items[0]
+        ctx.res = SeqExpr(items) if len(items) > 1 else items[0]
         # ```
 
     def code(self, ctx):
@@ -1030,34 +1030,34 @@ class Parser(object):
             elif occ_type == 0:
                 item = atom.res
 
-                while isinstance(item, ExprOcc01):
+                while isinstance(item, Occ01Expr):
                     item = item.item
 
-                if isinstance(item, ExprOcc0m):
+                if isinstance(item, Occ0mExpr):
                     ctx.res = item
-                elif isinstance(item, ExprOcc1m):
-                    ctx.res = ExprOcc0m(item.item)
+                elif isinstance(item, Occ1mExpr):
+                    ctx.res = Occ0mExpr(item.item)
                 else:
-                    ctx.res = ExprOcc01(item)
+                    ctx.res = Occ01Expr(item)
             elif occ_type == 1:
                 item = atom.res
 
-                while isinstance(item, (ExprOcc01, ExprOcc0m, ExprOcc1m)):
+                while isinstance(item, (Occ01Expr, Occ0mExpr, Occ1mExpr)):
                     item = item.item
 
-                ctx.res = ExprOcc0m(item)
+                ctx.res = Occ0mExpr(item)
             elif occ_type == 2:
                 item = atom.res
 
-                while isinstance(item, ExprOcc1m):
+                while isinstance(item, Occ1mExpr):
                     item = item.item
 
-                if isinstance(item, ExprOcc01):
-                    ctx.res = ExprOcc0m(item.item)
-                elif isinstance(item, ExprOcc0m):
+                if isinstance(item, Occ01Expr):
+                    ctx.res = Occ0mExpr(item.item)
+                elif isinstance(item, Occ0mExpr):
                     ctx.res = item
                 else:
-                    ctx.res = ExprOcc1m(item)
+                    ctx.res = Occ1mExpr(item)
             else:
                 raise ValueError(occ_type)
             # ```
@@ -1075,15 +1075,15 @@ class Parser(object):
         # ```
         item = or_expr.res
 
-        while isinstance(item, ExprOcc01):
+        while isinstance(item, Occ01Expr):
             item = item.item
 
-        if isinstance(item, ExprOcc0m):
+        if isinstance(item, Occ0mExpr):
             ctx.res = item
-        elif isinstance(item, ExprOcc1m):
-            ctx.res = ExprOcc0m(item.item)
+        elif isinstance(item, Occ1mExpr):
+            ctx.res = Occ0mExpr(item.item)
         else:
-            ctx.res = ExprOcc01(item)
+            ctx.res = Occ01Expr(item)
         # ```
 
     def atom(self, ctx):

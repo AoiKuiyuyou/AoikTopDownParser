@@ -7,8 +7,8 @@ from ..util.indent_util import add_indent
 from ..util.path_util import join_file_paths
 from .ast import EMPTY_PATTERN_INFO
 from .ast import Code
-from .ast import ExprSeq
 from .ast import Pattern
+from .ast import SeqExpr
 from .opts_const import GS_BACKTRACKING_ON
 from .opts_const import GS_RULE_FUNC_NAME_POF
 from .opts_const import GS_RULE_FUNC_NAME_POF_V_DFT
@@ -344,7 +344,7 @@ def get_single_pattern(item):
     if isinstance(item, Pattern):
         return item
 
-    if isinstance(item, ExprSeq):
+    if isinstance(item, SeqExpr):
         single_pattern_item = None
 
         for child_item in item.items:
