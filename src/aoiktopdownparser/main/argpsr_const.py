@@ -31,13 +31,6 @@ ARG_RULES_OBJ_URI_V = 'RULES_URI'
 ARG_RULES_OBJ_URI_H = "Rules string's URI."
 
 
-ARG_EXT_OPTS_URI_F = '-o'
-ARG_EXT_OPTS_URI_K = 'ARG_EXT_OPTS_URI_K'
-ARG_EXT_OPTS_URI_D = None
-ARG_EXT_OPTS_URI_V = 'OPTS_URI'
-ARG_EXT_OPTS_URI_H = "Options dict's URI."
-
-
 ARG_PSR_FILE_PATH_F = '-g'
 ARG_PSR_FILE_PATH_K = 'ARG_PSR_FILE_PATH_K'
 ARG_PSR_FILE_PATH_C = None.__class__
@@ -48,6 +41,20 @@ ARG_PSR_FILE_PATH_H = (
     ' If set off, no parser file is created, the generated parser code is'
     ' loaded dynamically to parse the source data specified.'
 )
+
+
+ARG_EXT_OPTS_URI_F = '-o'
+ARG_EXT_OPTS_URI_K = 'ARG_EXT_OPTS_URI_K'
+ARG_EXT_OPTS_URI_D = None
+ARG_EXT_OPTS_URI_V = 'OPTS_URI'
+ARG_EXT_OPTS_URI_H = "Options dict's URI."
+
+
+ARG_BACKTRACKING_F = '-b'
+ARG_BACKTRACKING_K = 'ARG_BACKTRACKING_K'
+ARG_BACKTRACKING_A = 'store_true'
+ARG_BACKTRACKING_D = False
+ARG_BACKTRACKING_H = 'Generate backtracking parser.'
 
 
 ARG_SRC_FILE_PATH_F = '-s'

@@ -15,6 +15,7 @@ from aoikimportutil import import_obj
 from .. import __version__
 from ..gen.generator import get_parser_txt
 from ..gen.opts import OPTS
+from ..gen.opts_const import GS_BACKTRACKING_ON
 from ..gen.parser import LexError
 from ..gen.parser import SyntaxError
 from ..gen.parser import debug_infos_to_msg
@@ -22,6 +23,7 @@ from ..gen.parser import parse
 from ..gen.parser import parsing_error_to_msg
 from .argpsr import ensure_args_spec
 from .argpsr import parser_make
+from .argpsr_const import ARG_BACKTRACKING_K
 from .argpsr_const import ARG_DEBUG_K
 from .argpsr_const import ARG_ENTRY_RULE_URI_K
 from .argpsr_const import ARG_EXT_OPTS_URI_K
@@ -190,6 +192,11 @@ def main_imp(args=None):
 
     if ext_opts:
         opts.update(ext_opts)
+
+    backtracking = getattr(args_obj, ARG_BACKTRACKING_K)
+
+    if backtracking:
+        opts[GS_BACKTRACKING_ON] = True
 
     rules_parser_debug_on = getattr(args_obj, ARG_RULES_PSR_DEBUG_K)
 

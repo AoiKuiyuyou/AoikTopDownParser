@@ -9,6 +9,11 @@ from aoikargutil import Option
 from aoikargutil import bool_0or1
 from aoikargutil import ensure_spec
 
+from .argpsr_const import ARG_BACKTRACKING_A
+from .argpsr_const import ARG_BACKTRACKING_D
+from .argpsr_const import ARG_BACKTRACKING_F
+from .argpsr_const import ARG_BACKTRACKING_H
+from .argpsr_const import ARG_BACKTRACKING_K
 from .argpsr_const import ARG_DEBUG_D
 from .argpsr_const import ARG_DEBUG_F
 from .argpsr_const import ARG_DEBUG_H
@@ -137,6 +142,14 @@ def parser_make():
         default=ARG_ENTRY_RULE_URI_D,
         metavar=ARG_ENTRY_RULE_URI_V,
         help=ARG_ENTRY_RULE_URI_H,
+    )
+
+    parser.add_argument(
+        ARG_BACKTRACKING_F,
+        dest=ARG_BACKTRACKING_K,
+        default=ARG_BACKTRACKING_D,
+        action=ARG_BACKTRACKING_A,
+        help=ARG_BACKTRACKING_H,
     )
 
     parser.add_argument(
