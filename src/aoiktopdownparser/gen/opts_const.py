@@ -41,9 +41,10 @@ SS_PRF = 'SS_'
 # Substitution settings below are internal. Do not specify values for them.
 # ----- BEG -----
 
-#
+# First set mapping.
 SS_RULE_FIRST_SET_MAPPING = 'SS_RULE_FIRST_SET_MAPPING'
 
+# Follow set mapping.
 SS_RULE_FOLLOW_SET_MAPPING = 'SS_RULE_FOLLOW_SET_MAPPING'
 
 # Rule RE objects

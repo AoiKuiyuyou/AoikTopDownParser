@@ -202,22 +202,11 @@ def main_imp(args=None):
             # `ext_opts` should override `inline_opts`
             opts.update(ext_opts)
 
-    # `odf` means option-defining-file path.
-    find_odf = functools.partial(
-        find_odf_v2,
-        inline_opts=inline_opts,
-        ext_opts_uri=ext_opts_uri,
-        ext_opts_mod=ext_opts_mod if ext_opts_uri is not None else None,
-        ext_opts=ext_opts,
-        rules_file_path=rules_file_path,
-    )
-
     try:
         parser_txt = get_parser_txt(
             rules=parsing_result.rule_defs,
             tplt_text=parser_tplt_text,
             opts=opts,
-            find_odf=find_odf,
         )
     except Exception:
         msg = '# Error\nFailed generating parser code.\n'
@@ -348,80 +337,3 @@ def main_imp(args=None):
     sys.stderr.write('\n\n'.join(msgs) + '\n')
 
     return 0
-
-
-def find_odf_v2(
-    opt_key,
-    inline_opts,
-    ext_opts_uri,
-    ext_opts_mod,
-    ext_opts,
-    rules_file_path,
-    opt_dft=None,
-):
-    # Find the file that defines given option.
-
-    opt_val = ext_opts.get(opt_key, opt_dft)
-
-    if opt_val is not opt_dft:
-        uri_parts = split_uri(ext_opts_uri)
-
-        protocol = uri_parts[0]
-
-        if protocol == 'py':
-            odf = ext_opts_mod.__file__
-        elif protocol == 'file':
-            odf = uri_parts[1]
-        else:
-            odf = None
-
-    else:
-        opt_val = inline_opts.get(opt_key, opt_dft)
-
-        if opt_val is not opt_dft:
-            if rules_file_path is not None:
-                odf = rules_file_path
-            else:
-                assert 0
-
-        else:
-            odf = None
-
-    return odf
-
-
-def split_uri(uri, mod_attr_sep='::'):
-    """Split given URI into a tuple of (protocol, module URI, attribute chain).
-
-    @param mod_attr_sep: the separator between module name and attribute name.
-    """
-    uri_parts = uri.split(mod_attr_sep, 1)
-
-    if len(uri_parts) == 2:
-        mod_uri, attr_chain = uri_parts
-    else:
-        mod_uri = uri_parts[0]
-
-        attr_chain = None
-
-    if mod_uri.startswith('py://'):
-        protocol = 'py'
-
-        mod_uri = mod_uri[5:]
-
-    elif mod_uri.startswith('file://'):
-        protocol = 'file'
-
-        mod_uri = mod_uri[7:]
-
-    # If no protocol prefix is present, and the uri ends with `.py`, then
-    # consider the uri as module file path instead of module name.
-    elif mod_uri.endswith('.py'):
-        protocol = 'file'
-
-    else:
-        protocol = 'py'
-
-    info = (protocol, mod_uri, attr_chain)
-
-    return info

@@ -23,11 +23,9 @@ from .opts_const import SS_RULE_FUNC_NAME_POF
 from .opts_const import SS_RULE_FUNC_NAME_PRF
 from .opts_const import SS_RULE_FUNCS
 from .opts_const import SS_RULE_REOS
-from .opts_util import Path
-from .opts_util import read_path
 
 
-def get_parser_txt(rules, tplt_text, opts, find_odf):
+def get_parser_txt(rules, tplt_text, opts):
     # A set of tuples.
     # Each tuple has two items.
     # The first item is the match pattern.
@@ -328,9 +326,7 @@ def get_parser_txt(rules, tplt_text, opts, find_odf):
         map_ss_key_to_value[SS_BACKTRACKING_FUNCS] = ''
 
     #
-    parser_txt = replace_ss_keys(
-        tplt_text, map_ss_key_to_value, find_odf=find_odf
-    )
+    parser_txt = replace_ss_keys(tplt_text, map_ss_key_to_value)
 
     #
     lines = []
@@ -369,15 +365,8 @@ def get_single_pattern(item):
     return None
 
 
-def replace_ss_keys(txt, spec, find_odf):
+def replace_ss_keys(txt, spec):
     for key, value in spec.items():
-        if isinstance(value, Path):
-            value = read_path(
-                path=value.path,
-                find_odf=find_odf,
-                opt_key=key,
-            )
-
         txt = txt.replace('{%s}' % key, value)
 
     return txt
