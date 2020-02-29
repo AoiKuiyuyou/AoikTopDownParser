@@ -473,12 +473,12 @@ class ExprOr(AstNode):
             #     self._ori()
             #     try:
             #         ...
-            #     except ScanError: self._ori(0)
+            #     except SyntaxError: self._ori(0)
             #     else: self._ori(1)
             #     self._ori()
             #     try:
             #         ...
-            #     except ScanError: self._ori(0)
+            #     except SyntaxError: self._ori(0)
             #     else: self._ori(1)
             # except ScanOk: self._or(1)
             # else: self._or(0)
@@ -492,7 +492,7 @@ class ExprOr(AstNode):
 
                 txts.append(add_indent(item_txt))
 
-                txts.append(r'except ScanError: self._ori(0)')
+                txts.append(r'except SyntaxError: self._ori(0)')
                 txts.append(r'else: self._ori(1)')
 
             res = '\n'.join(txts)
@@ -653,7 +653,7 @@ class ExprOcc01(AstNode):
             # self._o01()
             # try:
             #     ...
-            # except ScanError: self._o01(0)
+            # except SyntaxError: self._o01(0)
             # else: self._o01(1)
             # ```
 
@@ -664,7 +664,7 @@ class ExprOcc01(AstNode):
 
             txts.append(add_indent(item_txt))
 
-            txts.append('except ScanError: self._o01(0)')
+            txts.append('except SyntaxError: self._o01(0)')
             txts.append('else: self._o01(1)')
         else:
             is_in_expror = kwargs.get('is_in_expror', False)
@@ -778,7 +778,7 @@ class ExprOcc0m(AstNode):
             #     while 1:
             #         ...
             #         self._o0m(1)
-            # except ScanError: self._o0m(0)
+            # except SyntaxError: self._o0m(0)
             # ```
 
             txts.append('self._o0m()')
@@ -790,7 +790,7 @@ class ExprOcc0m(AstNode):
             txts.append(add_indent(item_txt, 2))
 
             txts.append('        self._o0m(1)')
-            txts.append('except ScanError: self._o0m(0)')
+            txts.append('except SyntaxError: self._o0m(0)')
         else:
             item_first_set = self.item.get_first_set()
 
@@ -862,7 +862,7 @@ class ExprOcc1m(AstNode):
             #     while 1:
             #         ...
             #         self._o1m(1)
-            # except ScanError: self._o1m(0)
+            # except SyntaxError: self._o1m(0)
             # ```
 
             txts.append('self._o1m()')
@@ -874,7 +874,7 @@ class ExprOcc1m(AstNode):
             txts.append(add_indent(item_txt, 2))
 
             txts.append('        self._o1m(1)')
-            txts.append('except ScanError: self._o1m(0)')
+            txts.append('except SyntaxError: self._o1m(0)')
         else:
             item_first_set = self.item.get_first_set()
 

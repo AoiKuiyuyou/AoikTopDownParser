@@ -23,11 +23,11 @@ lit_num:
 ([.]\d*)?       # Fraction part
 (e[-+]?\d+)?    # Exponent part
 """ @(flags='re.VERBOSE | re.IGNORECASE')
-    `ctx.res = eval(lit_num.res.group())`
+    `ctx.res = eval(lit_num.res.txt)`
 
 lit_bool:
     '(True|False)(?![a-zA-Z0-9_])'
-    `ctx.res = True if (lit_bool.res.group() == 'True') else False`
+    `ctx.res = True if (lit_bool.res.txt == 'True') else False`
 
 lit_none:
     'None(?![a-zA-Z0-9_])'
@@ -105,14 +105,14 @@ arg_expr:
     name
     equal_sign
     arg_val
-    `ctx.res = (name.res.group(), arg_val.res)`
+    `ctx.res = (name.res.txt, arg_val.res)`
 
 arg_val:
     lit_val
     `ctx.res = lit_val.res`
 
 lit_val:
-    lit_str `ctx.res = eval(lit_str.res.group())`
+    lit_str `ctx.res = eval(lit_str.res.txt)`
     | lit_num `ctx.res = lit_num.res`
     | lit_bool `ctx.res = lit_bool.res`
     | lit_none `ctx.res = lit_none.res`
@@ -131,7 +131,7 @@ rule_def:
     `args = args_def.res`
     )?
     or_expr
-    `ctx.res = RuleDef(name=rule_name.res.group(), item=or_expr.res, args=args)`
+    `ctx.res = RuleDef(name=rule_name.res.txt, item=or_expr.res, args=args)`
 
 or_expr:
     seq_expr
@@ -153,7 +153,7 @@ seq_expr:
 
 code:
     r'(`+)((?:.|\n)*?)\1'
-    `ctx.res = Code(code.res.group(2))`
+    `ctx.res = Code(code.res.match_obj.group(2))`
 
 occ_expr:
     occ01_group
@@ -227,10 +227,10 @@ atom:
     (args_def
     `args = args_def.res`
     )?
-    `ctx.res = Pattern(lit_str.res.group(), args=args)`
+    `ctx.res = Pattern(lit_str.res.txt, args=args)`
     |
     name
-    `ctx.res = RuleRef(name.res.group())`
+    `ctx.res = RuleRef(name.res.txt)`
     |
     group
     `ctx.res = group.res`

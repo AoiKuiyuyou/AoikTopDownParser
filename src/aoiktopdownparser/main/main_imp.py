@@ -15,10 +15,11 @@ from aoikimportutil import import_obj
 from .. import __version__
 from ..gen.generator import get_parser_txt
 from ..gen.opts import OPTS
-from ..gen.parser import ScanError
+from ..gen.parser import LexError
+from ..gen.parser import SyntaxError
 from ..gen.parser import debug_infos_to_msg
 from ..gen.parser import parse
-from ..gen.parser import scan_error_to_msg
+from ..gen.parser import parsing_error_to_msg
 from .argpsr import ensure_args_spec
 from .argpsr import parser_make
 from .argpsr_const import ARG_DEBUG_K
@@ -207,9 +208,10 @@ def main_imp(args=None):
         sys.stderr.write(msg)
 
     if exc_info is not None:
-        msg = scan_error_to_msg(
+        msg = parsing_error_to_msg(
             exc_info=exc_info,
-            scan_error_class=ScanError,
+            lex_error_class=LexError,
+            syntax_error_class=SyntaxError,
             title='# Error\nFailed parsing rules for generating parser.',
             txt=rules_txt,
         )
@@ -381,9 +383,10 @@ def main_imp(args=None):
         msgs.append(msg)
 
     if exc_info is not None:
-        msg = scan_error_to_msg(
+        msg = parsing_error_to_msg(
             exc_info=exc_info,
-            scan_error_class=getattr(parser_mod, 'ScanError'),
+            lex_error_class=getattr(parser_mod, 'LexError'),
+            syntax_error_class=getattr(parser_mod, 'SyntaxError'),
             title='# Error\nGenerated parser failed parsing source data.',
             txt=src_txt,
         )

@@ -13,7 +13,7 @@ class AttrDict(dict):
     __setattr__ = dict.__setitem__
 
 
-class ScanError(Exception):
+class SyntaxError(Exception):
 
     def __init__(
         self, ctx, txt, pos, row, col, token_names, eis=None, eisp=None
@@ -229,7 +229,7 @@ class Parser(object):
 
         try:
             rule_func(ctx_new)
-        except ScanError:
+        except SyntaxError:
             exc_info = sys.exc_info()
 
             if self._scan_ei is None or self._scan_ei[1] is not exc_info[1]:
@@ -288,7 +288,7 @@ class Parser(object):
         return rule_func
 {SS_BACKTRACKING_FUNCS}
     def _error(self, token_names):
-        raise ScanError(
+        raise SyntaxError(
             ctx=self._ctx,
             txt=self._txt,
             pos=self._pos,
@@ -350,12 +350,18 @@ def debug_infos_to_msg(debug_infos, txt):
     return msg
 
 
-def scan_error_to_msg(exc_info, scan_error_class, title, txt):
+def parsing_error_to_msg(
+    exc_info,
+    lex_error_class,
+    syntax_error_class,
+    title,
+    txt,
+):
     msg = title
 
     exc = exc_info[1]
 
-    if not isinstance(exc, scan_error_class):
+    if not isinstance(exc, syntax_error_class):
         tb_lines = format_exception(*exc_info)
 
         tb_msg = ''.join(tb_lines)
@@ -484,9 +490,9 @@ def main(args=None):
         sys.stderr.write(msg)
 
     if exc_info is not None:
-        msg = scan_error_to_msg(
+        msg = parsing_error_to_msg(
             exc_info=exc_info,
-            scan_error_class=ScanError,
+            syntax_error_class=SyntaxError,
             title='# ----- Parsing error -----',
             txt=rules_txt,
         )

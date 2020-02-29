@@ -2,6 +2,7 @@
 from __future__ import absolute_import
 
 from argparse import ArgumentParser
+import codecs
 from collections import OrderedDict
 from pprint import pformat
 import re
@@ -24,7 +25,16 @@ class AttrDict(dict):
     __setattr__ = dict.__setitem__
 
 
-class LexError(Exception):
+# Used in backtracking mode.
+class ScanOk(Exception):
+    pass
+
+
+class ParsingError(Exception):
+    pass
+
+
+class LexError(ParsingError):
 
     def __init__(
         self,
@@ -33,20 +43,31 @@ class LexError(Exception):
         row,
         col,
     ):
+        # Input string.
         self.txt = txt
 
+        # Input string length.
+        self.txt_len = len(txt)
+
+        # Input lines.
         self.lines = txt.split('\n')
 
+        # Current line.
         self.line = self.lines[row]
 
+        # Current position index.
         self.pos = pos
 
+        # Current row index.
         self.row = row
 
+        # Current column index.
         self.col = col
 
     def __str__(self):
-        col_mark = ' ' * self.col + '^'
+        narrow_columns_index = get_narrow_column_index(self.line, self.col)
+
+        col_mark = ' ' * narrow_columns_index + '|'
 
         source_text = (
             '```\n'
@@ -56,7 +77,7 @@ class LexError(Exception):
         ).format(self.line, col_mark)
 
         text = (
-            'Lexer failed at row {row} column {col} (char {pos}).\n' +\
+            'Lexer failed at row {row} column {col}, chararacter {pos}.\n' +\
             '{source_text}'
         ).format(
             row=self.row + 1,
@@ -68,7 +89,7 @@ class LexError(Exception):
         return text
 
 
-class ScanError(Exception):
+class SyntaxError(ParsingError):
 
     def __init__(
         self,
@@ -77,43 +98,72 @@ class ScanError(Exception):
         pos,
         row,
         col,
-        token_names,
-        current_token_name=None,
+        token_name=None,
+        token_names=[],
         eis=None,
         eisp=None,
+        msg=None,
     ):
+        # Current context.
         self.ctx = ctx
 
+        # Input string.
         self.txt = txt
 
+        # Input lines.
         self.lines = txt.split('\n')
 
+        # Current line.
         self.line = self.lines[row]
 
+        # Current position index.
         self.pos = pos
 
+        # Current row index.
         self.row = row
 
+        # Current column index.
         self.col = col
 
-        # Expected token names
-        self.token_names = token_names
+        # Current token name.
+        self.current_token_name = token_name
 
-        # Current token name
-        self.current_token_name = current_token_name
+        # Wanted token names.
+        self.wanted_token_names = token_names
 
-        # Scan exception infos of current branch
+        # Scanning exception infos of current branch.
         self.eis = eis
 
-        # Scan exception infos of previous branch
+        # Scanning exception infos of previous branch.
         self.eisp = eisp
+
+        # Error message.
+        self.msg = msg
 
     def __str__(self):
         ctx_names = get_ctx_names(self.ctx)
 
         ctx_msg = ' '.join(ctx_names) if ctx_names else ''
 
-        col_mark = ' ' * self.col + '^'
+        msg = self.msg
+
+        if msg is None:
+            msg = ''
+
+            if self.wanted_token_names:
+                msg += 'Wanted tokens: `{0}`。\n'.format(
+                    ' | '.join(self.wanted_token_names)
+                )
+
+            msg += (
+                'Met token: `{0}`。\n'.format(self.current_token_name)\
+                if self.current_token_name is not None\
+                else 'end-of-input。\n'
+            )
+
+        narrow_columns_index = get_narrow_column_index(self.line, self.col)
+
+        col_mark = ' ' * narrow_columns_index + '|'
 
         source_text = (
             '```\n'
@@ -123,13 +173,8 @@ class ScanError(Exception):
         ).format(self.line, col_mark)
 
         text = (
-            'Rule `{rule_name}` failed at row {row} column {col} (char {pos}) (ctx: {ctx_msg}).\n' +\
-            'Expect token `{token_names}`.\n' +\
-            (
-                'Got `{0}`.\n'.format(self.current_token_name)\
-                if self.current_token_name is not None\
-                else 'Got end-of-input.\n'
-            ) +\
+            'Rule `{rule_name}` failed at row {row} column {col}, chararacter {pos}.\nContext: {ctx_msg}.\n' +\
+            msg +\
             '{source_text}'
         ).format(
             rule_name=self.ctx.name,
@@ -137,16 +182,10 @@ class ScanError(Exception):
             row=self.row + 1,
             col=self.col + 1,
             pos=self.pos + 1,
-            token_names=' | '.join(self.token_names),
             source_text=source_text,
         )
 
         return text
-
-
-# Used in backtracking mode.
-class ScanOk(Exception):
-    pass
 
 
 class Parser(object):
@@ -154,41 +193,44 @@ class Parser(object):
     _RULE_FUNC_PRF = ''
     _RULE_FUNC_POF = ''
 
-    # `SK` means state dict key
+    # `SK` means state dict key.
     #
-    # Text to parse
-    _SK_TXT = 'txt'
+    # Position index.
+    _SK_POS = 'pos'
 
-    # Row number (0-based)
+    # Row index.
     _SK_ROW = 'row'
 
-    # Column number (0-based)
+    # Column index.
     _SK_COL = 'col'
 
-    # Repeated occurrence
+    # Repeated occurrence.
     _SK_OCC = 'occ'
 
-    # `DK` means debug dict key
+    # Token index.
+    _SK_TOK_IDX = 'tok_idx'
+
+    # `DK` means debug dict key.
     #
-    # Rule name
+    # Rule name.
     _DK_NAME = 'name'
 
-    # Text to parse
+    # Input string.
     _DK_TXT = 'txt'
 
-    # Position number (0-based)
+    # Position index.
     _DK_POS = 'pos'
 
-    # Row number (0-based)
+    # Row index.
     _DK_ROW = 'row'
 
-    # Column number (0-based)
+    # Column index.
     _DK_COL = 'col'
 
-    # Scan level
+    # Scanning level.
     _DK_SLV = 'slv'
 
-    # Scan is success
+    # Scanning is successful.
     _DK_SSS = 'sss'
 
     _TOKEN_NAME_TO_REGEX_OBJ = OrderedDict([
@@ -238,7 +280,7 @@ class Parser(object):
         if self._debug:
             self._debug_infos = []
 
-        self._ws_rep = r'([\s]*(#[^\n]*)?)*'
+        self._ws_rep = r'([ \t]*(#[^\n]*)?[\n]?)*'
 
         self._ws_reo = re.compile(self._ws_rep)\
             if self._ws_rep is not None else None
@@ -253,7 +295,7 @@ class Parser(object):
         self._tokens_count = 0
 
         # Current token index
-        self._current_token_index = 0
+        self._token_index = 0
 
         # Scan level
         self._scan_lv = -1
@@ -267,7 +309,10 @@ class Parser(object):
         # Scan exc infos of previous branching
         self._scan_eis_prev = []
 
+        # Backtracking state stack.
         self._state_stack = []
+
+    WHITESPACE_TOKEN_NAME = ''
 
     def _make_tokens(self):
         self._pos = 0
@@ -278,10 +323,9 @@ class Parser(object):
 
         regex_objs = list(self._TOKEN_NAME_TO_REGEX_OBJ.items())
 
-        if self._ws_reo is not None:
-            regex_objs.append((None, self._ws_reo))
-
         while self._pos <= txt_len:
+            self._make_whitespace_token()
+
             for token_name, regex_obj in regex_objs:
                 match_obj = regex_obj.match(self._txt, self._pos)
 
@@ -294,22 +338,9 @@ class Parser(object):
 
                 if matched_len > 0\
                 or regex_obj.pattern == '$':
-                    token_info = AttrDict()
+                    self._add_token(token_name, matched_txt, match_obj)
 
-                    token_info.pos = self._pos
-                    token_info.row = self._row
-                    token_info.col = self._col
-                    token_info.txt = matched_txt
-                    token_info.len = matched_len
-                    token_info.match_obj = match_obj
-
-                    if token_name is not None:
-                        self._tokens.append((token_name, token_info))
-
-                    if regex_obj.pattern != '$':
-                        if token_info is not None:
-                            self._update_pos_row_col(token_info)
-                    else:
+                    if regex_obj.pattern == '$':
                         # Make the loop stop.
                         self._pos = txt_len + 1
 
@@ -329,13 +360,161 @@ class Parser(object):
 
         self._tokens_count = len(self._tokens)
 
-    def _peek(self, token_names, is_required=False, is_branch=False):
-        if self._current_token_index >= self._tokens_count:
-            return None
+    def _make_whitespace_token(self):
+        match_obj = self._ws_reo.match(self._txt, self._pos)
 
-        current_token_name, token_info = self._tokens[
-            self._current_token_index
-        ]
+        if match_obj:
+            matched_txt = match_obj.group()
+
+            if not matched_txt:
+                return
+
+            self._add_token(self.WHITESPACE_TOKEN_NAME, matched_txt, match_obj)
+
+    def _add_token(self, token_name, matched_txt, match_obj):
+        token_info = AttrDict()
+
+        token_info.pos = self._pos
+
+        token_info.row = self._row
+
+        token_info.col = self._col
+
+        token_info.txt = matched_txt
+
+        token_info.len = len(matched_txt)
+
+        token_info.rows_count = matched_txt.count('\n') + 1
+
+        token_info.end_row = token_info.row + token_info.rows_count - 1
+
+        if token_info.rows_count == 1:
+            token_info.end_col = token_info.col + len(matched_txt)
+        else:
+            last_row_txt = matched_txt[matched_txt.rfind('\n') + 1:]
+
+            token_info.end_col = len(last_row_txt)
+
+        token_info.match_obj = match_obj
+
+        self._tokens.append((token_name, token_info))
+
+        self._update_pos_row_col(token_info)
+
+    def _update_pos_row_col(self, token_info):
+        self._pos = token_info.pos + token_info.len
+
+        matched_txt = token_info.txt
+
+        row_cnt = matched_txt.count('\n')
+
+        if row_cnt == 0:
+            self._row = token_info.row
+
+            self._col = token_info.col + len(matched_txt)
+        else:
+            last_row_txt = matched_txt[matched_txt.rfind('\n') + 1:]
+
+            self._row = token_info.row + row_cnt
+
+            self._col = len(last_row_txt)
+
+    def _get_row_col(self, token_index=None, skip_whitespace=False):
+        if self._tokens_count == 0:
+            raise ValueError(self._tokens_count)
+
+        if token_index is None:
+            token_index = self._token_index
+
+        if token_index > self._tokens_count:
+            raise ValueError(token_index)
+
+        if skip_whitespace:
+            while True:
+                if token_index > self._tokens_count:
+                    raise ValueError(token_index)
+                elif token_index == self._tokens_count:
+                    _, last_token_info = self._tokens[-1]
+
+                    return (
+                        last_token_info.end_row,
+                        last_token_info.end_col
+                    )
+
+                token_name, token_info = self._tokens[token_index]
+
+                if token_name == self.WHITESPACE_TOKEN_NAME:
+                    token_index += 1
+
+                    continue
+
+                break
+
+            return (token_info.row, token_info.col)
+        else:
+            if token_index == self._tokens_count:
+                _, last_token_info = self._tokens[-1]
+
+                return (
+                    last_token_info.end_row,
+                    last_token_info.end_col
+                )
+
+            _, token_info = self._tokens[token_index]
+
+            return (token_info.row, token_info.col)
+
+    def _get_start_row_col(self):
+        row, col = self._get_row_col(skip_whitespace=True)
+        return (row + 1, col + 1)
+
+    def _get_end_row_col(self):
+        row, col = self._get_row_col(skip_whitespace=False)
+        return (row + 1, col + 1)
+
+    def _get_token_index(self, skip_whitespace=True):
+        token_index = self._token_index
+
+        if skip_whitespace:
+            while True:
+                if token_index >= self._tokens_count:
+                    return None
+
+                current_token_name, _ = self._tokens[token_index]
+
+                if current_token_name == self.WHITESPACE_TOKEN_NAME:
+                    token_index += 1
+
+                    continue
+
+                break
+        else:
+            if token_index >= self._tokens_count:
+                return None
+
+        return token_index
+
+    def _get_ctx_attr(self, ctx, attr_name, default=None):
+        try:
+            return ctx[attr_name]
+        except KeyError:
+            return default
+
+    def _peek(self, token_names, is_required=False, is_branch=False):
+        token_index = self._token_index
+
+        while True:
+            if token_index >= self._tokens_count:
+                return None
+
+            current_token_name, token_info = self._tokens[token_index]
+
+            if current_token_name == self.WHITESPACE_TOKEN_NAME:
+                token_index += 1
+
+                continue
+
+            break
 
         if current_token_name in token_names:
             return current_token_name
@@ -345,20 +524,54 @@ class Parser(object):
         else:
             return None
 
+    def _retract(self, token_index=None):
+        if token_index is None:
+            while True:
+                if self._token_index <= 0:
+                    raise ValueError(self._token_index)
+
+                self._token_index -= 1
+
+                current_token_name, token_info = self._tokens[
+                    self._token_index
+                ]
+
+                if current_token_name == self.WHITESPACE_TOKEN_NAME:
+                    continue
+
+                break
+        else:
+            if token_index < 0 or token_index >= self._txt_len:
+                raise ValueError(token_index)
+
+            _, token_info = self._tokens[token_index]
+
+        self._pos = token_info.pos
+        self._row = token_info.row
+        self._col = token_info.col
+
     def _scan_token(self, token_name, new_ctx=False):
-        regex_obj = self._TOKEN_NAME_TO_REGEX_OBJ[token_name]
+        while True:
+            if self._token_index >= self._tokens_count:
+                self._error(token_names=[token_name])
 
-        if self._current_token_index >= self._tokens_count:
-            self._error(token_names=[token_name])
+            current_token_name, token_info = self._tokens[
+                self._token_index
+            ]
 
-        current_token_name, token_info = self._tokens[
-            self._current_token_index
-        ]
+            if current_token_name == self.WHITESPACE_TOKEN_NAME:
+                self._token_index += 1
+
+                self._update_pos_row_col(token_info)
+
+                continue
+
+            break
 
         if current_token_name != token_name:
             self._error(token_names=[token_name])
 
-        self._current_token_index += 1
+        self._token_index += 1
 
         self._update_pos_row_col(token_info)
 
@@ -371,9 +584,7 @@ class Parser(object):
         else:
             ctx = self._ctx
 
-        ctx.res = token_info.match_obj
-
-        ctx.token = token_info
+        ctx.res = token_info
 
         return ctx
 
@@ -392,7 +603,6 @@ class Parser(object):
 
         rule_func = self._rule_func_get(name)
 
-        # Scan exc info
         self._scan_ei = None
 
         if self._debug:
@@ -409,7 +619,7 @@ class Parser(object):
 
         try:
             rule_func(ctx_new)
-        except ScanError:
+        except SyntaxError:
             exc_info = sys.exc_info()
 
             if self._scan_ei is None or self._scan_ei[1] is not exc_info[1]:
@@ -428,24 +638,6 @@ class Parser(object):
 
         return ctx_new
 
-    def _update_pos_row_col(self, token_info):
-        self._pos = token_info.pos + token_info.len
-
-        matched_txt = token_info.txt
-
-        row_cnt = matched_txt.count('\n')
-
-        if row_cnt == 0:
-            last_row_txt = matched_txt
-
-            self._col = token_info.col + len(last_row_txt)
-        else:
-            last_row_txt = matched_txt[matched_txt.rfind('\n') + 1:]
-
-            self._row = token_info.row + row_cnt
-
-            self._col = token_info.col + len(last_row_txt)
-
     def _rule_func_get(self, name):
         rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
 
@@ -453,24 +645,29 @@ class Parser(object):
 
         return rule_func
 
-    def _error(self, token_names):
-        if self._current_token_index >= self._tokens_count:
-            current_token_name = None
-        else:
-            current_token_name, _ = self._tokens[
-                self._current_token_index
-            ]
+    def _error(self, msg=None, token_names=None):
+        token_index = self._get_token_index(skip_whitespace=True)
 
-        raise ScanError(
+        if token_index is None:
+            token_name = None
+        else:
+            token_name, info = self._tokens[token_index]
+
+            self._pos = info.pos
+            self._row = info.row
+            self._col = info.col
+
+        raise SyntaxError(
             ctx=self._ctx,
             txt=self._txt,
             pos=self._pos,
             row=self._row,
             col=self._col,
+            token_name=token_name,
             token_names=token_names,
-            current_token_name=current_token_name,
             eis=self._scan_eis,
             eisp=self._scan_eis_prev,
+            msg=msg,
         )
 
     def all(self, ctx):
@@ -481,94 +678,94 @@ class Parser(object):
             'at_sign',
             'rule_name'],
             is_required=True) == 'at_sign':
-            args_def = self._scan_rule('args_def')
+            args_def = self._scan_rule('args_def')  # noqa
             # ```
             ctx.opts = args_def.res
             # ```
-        rule_seq = self._scan_rule('rule_seq')
+        rule_seq = self._scan_rule('rule_seq')  # noqa
         # ```
         ctx.rule_defs = rule_seq.res
         # ```
-        end = self._scan_rule('end')
+        end = self._scan_rule('end')  # noqa
 
     def end(self, ctx):
-        end = self._scan_token('end')
+        end = self._scan_token('end')  # noqa
 
     def lit_str(self, ctx):
-        lit_str = self._scan_token('lit_str')
+        lit_str = self._scan_token('lit_str')  # noqa
         # ```
         ctx.res = lit_str.res
         # ```
 
     def lit_num(self, ctx):
-        lit_num = self._scan_token('lit_num')
+        lit_num = self._scan_token('lit_num')  # noqa
         # ```
-        ctx.res = eval(lit_num.res.group())
+        ctx.res = eval(lit_num.res.txt)
         # ```
 
     def lit_bool(self, ctx):
-        lit_bool = self._scan_token('lit_bool')
+        lit_bool = self._scan_token('lit_bool')  # noqa
         # ```
-        ctx.res = True if (lit_bool.res.group() == 'True') else False
+        ctx.res = True if (lit_bool.res.txt == 'True') else False
         # ```
 
     def lit_none(self, ctx):
-        lit_none = self._scan_token('lit_none')
+        lit_none = self._scan_token('lit_none')  # noqa
         # ```
         ctx.res = None
         # ```
 
     def rule_name(self, ctx):
-        rule_name = self._scan_token('rule_name')
+        rule_name = self._scan_token('rule_name')  # noqa
         # ```
         ctx.res = rule_name.res
         # ```
 
     def name(self, ctx):
-        name = self._scan_token('name')
+        name = self._scan_token('name')  # noqa
         # ```
         ctx.res = name.res
         # ```
 
     def at_sign(self, ctx):
-        at_sign = self._scan_token('at_sign')
+        at_sign = self._scan_token('at_sign')  # noqa
 
     def comma(self, ctx):
-        comma = self._scan_token('comma')
+        comma = self._scan_token('comma')  # noqa
 
     def equal_sign(self, ctx):
-        equal_sign = self._scan_token('equal_sign')
+        equal_sign = self._scan_token('equal_sign')  # noqa
 
     def brkt_beg(self, ctx):
-        brkt_beg = self._scan_token('brkt_beg')
+        brkt_beg = self._scan_token('brkt_beg')  # noqa
 
     def brkt_end(self, ctx):
-        brkt_end = self._scan_token('brkt_end')
+        brkt_end = self._scan_token('brkt_end')  # noqa
 
     def colon(self, ctx):
-        colon = self._scan_token('colon')
+        colon = self._scan_token('colon')  # noqa
 
     def pipe_sign(self, ctx):
-        pipe_sign = self._scan_token('pipe_sign')
+        pipe_sign = self._scan_token('pipe_sign')  # noqa
 
     def sqrbrkt_beg(self, ctx):
-        sqrbrkt_beg = self._scan_token('sqrbrkt_beg')
+        sqrbrkt_beg = self._scan_token('sqrbrkt_beg')  # noqa
 
     def sqrbrkt_end(self, ctx):
-        sqrbrkt_end = self._scan_token('sqrbrkt_end')
+        sqrbrkt_end = self._scan_token('sqrbrkt_end')  # noqa
 
     def occ01_trailer(self, ctx):
-        occ01_trailer = self._scan_token('occ01_trailer')
+        occ01_trailer = self._scan_token('occ01_trailer')  # noqa
 
     def occ0m_trailer(self, ctx):
-        occ0m_trailer = self._scan_token('occ0m_trailer')
+        occ0m_trailer = self._scan_token('occ0m_trailer')  # noqa
 
     def occ1m_trailer(self, ctx):
-        occ1m_trailer = self._scan_token('occ1m_trailer')
+        occ1m_trailer = self._scan_token('occ1m_trailer')  # noqa
 
     def args_def(self, ctx):
-        at_sign = self._scan_rule('at_sign')
-        args_group = self._scan_rule('args_group')
+        at_sign = self._scan_rule('at_sign')  # noqa
+        args_group = self._scan_rule('args_group')  # noqa
         # ```
         pairs = []
         item = args_group
@@ -580,30 +777,30 @@ class Parser(object):
         # ```
 
     def args_group(self, ctx):
-        brkt_beg = self._scan_rule('brkt_beg')
+        brkt_beg = self._scan_rule('brkt_beg')  # noqa
         if self._peek(['brkt_end']):
-            brkt_end = self._scan_rule('brkt_end')
+            brkt_end = self._scan_rule('brkt_end')  # noqa
         elif self._peek(['name'], is_branch=True):
-            arg_item = self._scan_rule('arg_item')
+            arg_item = self._scan_rule('arg_item')  # noqa
         else:
             self._error([
             'name',
             'brkt_end'])
 
     def arg_item(self, ctx):
-        arg_expr = self._scan_rule('arg_expr')
+        arg_expr = self._scan_rule('arg_expr')  # noqa
         # ```
         ctx.res = arg_expr.res
         ctx.par.arg_item = ctx
         # ```
         if self._peek(['brkt_end']):
-            brkt_end = self._scan_rule('brkt_end')
+            brkt_end = self._scan_rule('brkt_end')  # noqa
         elif self._peek(['comma'], is_branch=True):
-            comma = self._scan_rule('comma')
+            comma = self._scan_rule('comma')  # noqa
             if self._peek(['brkt_end']):
-                brkt_end = self._scan_rule('brkt_end')
+                brkt_end = self._scan_rule('brkt_end')  # noqa
             elif self._peek(['name'], is_branch=True):
-                arg_item = self._scan_rule('arg_item')
+                arg_item = self._scan_rule('arg_item')  # noqa
             else:
                 self._error([
                 'name',
@@ -614,37 +811,37 @@ class Parser(object):
             'comma'])
 
     def arg_expr(self, ctx):
-        name = self._scan_rule('name')
-        equal_sign = self._scan_rule('equal_sign')
-        arg_val = self._scan_rule('arg_val')
+        name = self._scan_rule('name')  # noqa
+        equal_sign = self._scan_rule('equal_sign')  # noqa
+        arg_val = self._scan_rule('arg_val')  # noqa
         # ```
-        ctx.res = (name.res.group(), arg_val.res)
+        ctx.res = (name.res.txt, arg_val.res)
         # ```
 
     def arg_val(self, ctx):
-        lit_val = self._scan_rule('lit_val')
+        lit_val = self._scan_rule('lit_val')  # noqa
         # ```
         ctx.res = lit_val.res
         # ```
 
     def lit_val(self, ctx):
         if self._peek(['lit_str']):
-            lit_str = self._scan_rule('lit_str')
+            lit_str = self._scan_rule('lit_str')  # noqa
             # ```
-            ctx.res = eval(lit_str.res.group())
+            ctx.res = eval(lit_str.res.txt)
             # ```
         elif self._peek(['lit_num'], is_branch=True):
-            lit_num = self._scan_rule('lit_num')
+            lit_num = self._scan_rule('lit_num')  # noqa
             # ```
             ctx.res = lit_num.res
             # ```
         elif self._peek(['lit_bool'], is_branch=True):
-            lit_bool = self._scan_rule('lit_bool')
+            lit_bool = self._scan_rule('lit_bool')  # noqa
             # ```
             ctx.res = lit_bool.res
             # ```
         elif self._peek(['lit_none'], is_branch=True):
-            lit_none = self._scan_rule('lit_none')
+            lit_none = self._scan_rule('lit_none')  # noqa
             # ```
             ctx.res = lit_none.res
             # ```
@@ -660,7 +857,7 @@ class Parser(object):
         ctx.res = []
         # ```
         while True:
-            rule_def = self._scan_rule('rule_def')
+            rule_def = self._scan_rule('rule_def')  # noqa
             # ```
             ctx.res.append(rule_def.res)
             # ```
@@ -671,8 +868,8 @@ class Parser(object):
                 break
 
     def rule_def(self, ctx):
-        rule_name = self._scan_rule('rule_name')
-        colon = self._scan_rule('colon')
+        rule_name = self._scan_rule('rule_name')  # noqa
+        colon = self._scan_rule('colon')  # noqa
         # ```
         args = None
         # ```
@@ -684,17 +881,17 @@ class Parser(object):
             'brkt_beg',
             'sqrbrkt_beg'],
             is_required=True) == 'at_sign':
-            args_def = self._scan_rule('args_def')
+            args_def = self._scan_rule('args_def')  # noqa
             # ```
             args = args_def.res
             # ```
-        or_expr = self._scan_rule('or_expr')
+        or_expr = self._scan_rule('or_expr')  # noqa
         # ```
-        ctx.res = RuleDef(name=rule_name.res.group(), item=or_expr.res, args=args)
+        ctx.res = RuleDef(name=rule_name.res.txt, item=or_expr.res, args=args)
         # ```
 
     def or_expr(self, ctx):
-        seq_expr = self._scan_rule('seq_expr')
+        seq_expr = self._scan_rule('seq_expr')  # noqa
         # ```
         items = [seq_expr.res]
         # ```
@@ -705,8 +902,8 @@ class Parser(object):
             'sqrbrkt_end',
             'end'],
             is_required=True) == 'pipe_sign':
-            pipe_sign = self._scan_rule('pipe_sign')
-            seq_expr = self._scan_rule('seq_expr')
+            pipe_sign = self._scan_rule('pipe_sign')  # noqa
+            seq_expr = self._scan_rule('seq_expr')  # noqa
             # ```
             items.append(seq_expr.res)
             # ```
@@ -726,11 +923,11 @@ class Parser(object):
                 'brkt_beg',
                 'sqrbrkt_beg'],
                 is_required=True) == 'code':
-                code = self._scan_rule('code')
+                code = self._scan_rule('code')  # noqa
                 # ```
                 items.append(code.res)
                 # ```
-            occ_expr = self._scan_rule('occ_expr')
+            occ_expr = self._scan_rule('occ_expr')  # noqa
             # ```
             items.append(occ_expr.res)
             # ```
@@ -746,7 +943,7 @@ class Parser(object):
                 'pipe_sign',
                 'end'],
                 is_required=True) == 'code':
-                code = self._scan_rule('code')
+                code = self._scan_rule('code')  # noqa
                 # ```
                 items.append(code.res)
                 # ```
@@ -773,14 +970,14 @@ class Parser(object):
         # ```
 
     def code(self, ctx):
-        code = self._scan_token('code')
+        code = self._scan_token('code')  # noqa
         # ```
-        ctx.res = Code(code.res.group(2))
+        ctx.res = Code(code.res.match_obj.group(2))
         # ```
 
     def occ_expr(self, ctx):
         if self._peek(['sqrbrkt_beg']):
-            occ01_group = self._scan_rule('occ01_group')
+            occ01_group = self._scan_rule('occ01_group')  # noqa
             # ```
             ctx.res = occ01_group.res
             # ```
@@ -788,7 +985,7 @@ class Parser(object):
             'lit_str',
             'name',
             'brkt_beg'], is_branch=True):
-            atom = self._scan_rule('atom')
+            atom = self._scan_rule('atom')  # noqa
             # ```
             occ_type = None
             # ```
@@ -811,17 +1008,17 @@ class Parser(object):
                 'occ1m_trailer',
                 'occ01_trailer']:
                 if self._peek(['occ01_trailer']):
-                    occ01_trailer = self._scan_rule('occ01_trailer')
+                    occ01_trailer = self._scan_rule('occ01_trailer')  # noqa
                     # ```
                     occ_type = 0
                     # ```
                 elif self._peek(['occ0m_trailer'], is_branch=True):
-                    occ0m_trailer = self._scan_rule('occ0m_trailer')
+                    occ0m_trailer = self._scan_rule('occ0m_trailer')  # noqa
                     # ```
                     occ_type = 1
                     # ```
                 elif self._peek(['occ1m_trailer'], is_branch=True):
-                    occ1m_trailer = self._scan_rule('occ1m_trailer')
+                    occ1m_trailer = self._scan_rule('occ1m_trailer')  # noqa
                     # ```
                     occ_type = 2
                     # ```
@@ -875,9 +1072,9 @@ class Parser(object):
             'sqrbrkt_beg'])
 
     def occ01_group(self, ctx):
-        sqrbrkt_beg = self._scan_rule('sqrbrkt_beg')
-        or_expr = self._scan_rule('or_expr')
-        sqrbrkt_end = self._scan_rule('sqrbrkt_end')
+        sqrbrkt_beg = self._scan_rule('sqrbrkt_beg')  # noqa
+        or_expr = self._scan_rule('or_expr')  # noqa
+        sqrbrkt_end = self._scan_rule('sqrbrkt_end')  # noqa
         # ```
         item = or_expr.res
 
@@ -894,7 +1091,7 @@ class Parser(object):
 
     def atom(self, ctx):
         if self._peek(['lit_str']):
-            lit_str = self._scan_rule('lit_str')
+            lit_str = self._scan_rule('lit_str')  # noqa
             # ```
             args = None
             # ```
@@ -914,20 +1111,20 @@ class Parser(object):
                 'pipe_sign',
                 'end'],
                 is_required=True) == 'at_sign':
-                args_def = self._scan_rule('args_def')
+                args_def = self._scan_rule('args_def')  # noqa
                 # ```
                 args = args_def.res
                 # ```
             # ```
-            ctx.res = Pattern(lit_str.res.group(), args=args)
+            ctx.res = Pattern(lit_str.res.txt, args=args)
             # ```
         elif self._peek(['name'], is_branch=True):
-            name = self._scan_rule('name')
+            name = self._scan_rule('name')  # noqa
             # ```
-            ctx.res = RuleRef(name.res.group())
+            ctx.res = RuleRef(name.res.txt)
             # ```
         elif self._peek(['brkt_beg'], is_branch=True):
-            group = self._scan_rule('group')
+            group = self._scan_rule('group')  # noqa
             # ```
             ctx.res = group.res
             # ```
@@ -938,9 +1135,9 @@ class Parser(object):
             'brkt_beg'])
 
     def group(self, ctx):
-        brkt_beg = self._scan_rule('brkt_beg')
-        or_expr = self._scan_rule('or_expr')
-        brkt_end = self._scan_rule('brkt_end')
+        brkt_beg = self._scan_rule('brkt_beg')  # noqa
+        or_expr = self._scan_rule('or_expr')  # noqa
+        brkt_end = self._scan_rule('brkt_end')  # noqa
         # ```
         ctx.res = or_expr.res
         # ```
@@ -978,7 +1175,7 @@ def debug_infos_to_msg(debug_infos, txt):
         row_txt = rows[debug_info.row]
 
         msg = '{indent}{error_sign}{name}: {row}.{col} ({pos}): {txt}'.format(
-            indent='    ' * debug_info.slv,
+            indent='  ' * debug_info.slv,
             error_sign='' if debug_info.sss else '!',
             name=debug_info.name,
             row=debug_info.row + 1,
@@ -996,17 +1193,26 @@ def debug_infos_to_msg(debug_infos, txt):
     return msg
 
 
-def scan_error_to_msg(exc_info, scan_error_class, title, txt):
+def parsing_error_to_msg(
+    exc_info,
+    lex_error_class,
+    syntax_error_class,
+    title,
+    txt,
+):
     msg = title
 
     exc = exc_info[1]
 
-    if not isinstance(exc, scan_error_class):
+    if isinstance(exc, lex_error_class):
+        return '{0}\n{1}'.format(title, str(exc))
+
+    if not isinstance(exc, syntax_error_class):
         tb_lines = format_exception(*exc_info)
 
         tb_msg = ''.join(tb_lines)
 
-        msg += '\n---\n{}---\n'.format(tb_msg)
+        msg += '\n---\n{0}---\n'.format(tb_msg)
 
         return msg
 
@@ -1044,11 +1250,14 @@ def scan_error_to_msg(exc_info, scan_error_class, title, txt):
 
             row_txt = rows[exc.row]
 
-            col_mark = ' ' * exc.col + '^'
+            narrow_columns_index = get_narrow_column_index(row_txt, exc.col)
+
+            col_mark = ' ' * narrow_columns_index + '|'
 
             msg = (
-                'Rule `{rule}` failed at {row}.{col} ({pos})'
-                ' (ctx: {ctx_msg}):\n'
+                'Rule `{rule}` failed at row {row} column {col}'
+                ' character {pos}.\n'
+                ' Context: {ctx_msg}.\n'
                 '```\n'
                 '{row_txt}\n'
                 '{col_mark}\n'
@@ -1092,6 +1301,48 @@ def get_ctx_names(ctx):
     return ctx_names
 
 
+WIDE_CHARS_REO = re.compile(
+    '[\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
+)
+
+NON_WIDE_CHARS_REO = re.compile(
+    '[\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
+)
+
+def get_narrow_column_index(row_txt, column_index):
+    if WIDE_CHARS_REO is None:
+        return column_index
+
+    row_txt = row_txt[:column_index]
+
+    row_txt_count = len(row_txt)
+
+    narrow_column_index = 0
+
+    current_index = 0
+
+    while current_index < row_txt_count:
+        match_obj = WIDE_CHARS_REO.match(row_txt, current_index)
+
+        if match_obj:
+            chars_count = len(match_obj.group())
+
+            narrow_column_index += chars_count * 2
+
+            current_index += chars_count
+
+        match_obj = NON_WIDE_CHARS_REO.match(row_txt, current_index)
+
+        if match_obj:
+            chars_count = len(match_obj.group())
+
+            narrow_column_index += chars_count
+
+            current_index += chars_count
+
+    return narrow_column_index
+
+
 def main(args=None):
     args_parser = ArgumentParser()
 
@@ -1108,9 +1359,12 @@ def main(args=None):
     source_file_path = args_obj.source_file_path
 
     try:
-        rules_txt = open(source_file_path).read()
+        rules_txt = codecs.open(source_file_path, encoding='utf-8').read()
     except Exception:
-        msg = 'Failed reading source file: `{0}`\n'.format(source_file_path)
+        msg = 'Failed reading source file: `{0}`\n---\n{1}---\n'.format(
+            source_file_path,
+            format_exc(),
+        )
 
         sys.stderr.write(msg)
 
@@ -1132,9 +1386,10 @@ def main(args=None):
         sys.stderr.write(msg)
 
     if exc_info is not None:
-        msg = scan_error_to_msg(
+        msg = parsing_error_to_msg(
             exc_info=exc_info,
-            scan_error_class=ScanError,
+            lex_error_class=LexError,
+            syntax_error_class=SyntaxError,
             title='# ----- Parsing error -----',
             txt=rules_txt,
         )
