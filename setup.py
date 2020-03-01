@@ -5,10 +5,6 @@ from setuptools import find_packages
 from setuptools import setup
 
 
-with open('requirements.txt') as requirements_file:
-    install_requires = requirements_file.read().splitlines()
-
-
 setup(
     name='AoikTopDownParser',
 
@@ -31,7 +27,7 @@ setup(
     license='MIT',
 
     classifiers=[
-        'Development Status :: 3 - Alpha',
+        'Development Status :: 5 - Production/Stable',
         'Environment :: Console',
         'Intended Audience :: Developers',
         'License :: OSI Approved :: MIT License',
@@ -39,7 +35,6 @@ setup(
         'Programming Language :: Python :: 2',
         'Programming Language :: Python :: 2.7',
         'Programming Language :: Python :: 3',
-        'Programming Language :: Python :: 3.7',
     ],
 
     keywords=(
@@ -53,11 +48,9 @@ setup(
     package_data={
         'aoiktopdownparser': [
             'demo/*/*',
-            'gen/me/*',
+            'gen/*',
         ],
     },
-
-    install_requires=install_requires,
 
     entry_points={
         'console_scripts': [
