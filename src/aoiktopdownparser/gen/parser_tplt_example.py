@@ -152,8 +152,8 @@ class SyntaxError(ParsingError):
                 )
 
             msg += (
-                'Met token: `{0}`。\n'.format(self.current_token_name)\
-                if self.current_token_name is not None\
+                'Met token: `{0}`。\n'.format(self.current_token_name)
+                if self.current_token_name is not None
                 else 'end-of-input。\n'
             )
 
@@ -169,9 +169,9 @@ class SyntaxError(ParsingError):
         ).format(self.line, col_mark)
 
         text = (
-            'Rule `{rule_name}` failed at row {row}, column {col},' +\
-            ' character {pos}.\nContext: {ctx_msg}.\n' +\
-            msg +\
+            'Rule `{rule_name}` failed at row {row}, column {col},' +
+            ' character {pos}.\nContext: {ctx_msg}.\n' +
+            msg +
             '{source_text}'
         ).format(
             rule_name=self.ctx.name,
@@ -402,7 +402,8 @@ class Parser(object):
             while True:
                 if token_index > self._tokens_count:
                     raise ValueError(token_index)
-                elif token_index == self._tokens_count:
+
+                if token_index == self._tokens_count:
                     _, last_token_info = self._tokens[-1]
 
                     return (

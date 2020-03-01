@@ -233,17 +233,17 @@ class RuleDef(AstNode):
                             single_pattern_item = None
 
                             break
-                        else:
-                            single_pattern_item = item
 
-                            seq_txt = item.gen(
-                                to_token_name,
-                                to_first_set,
-                                opts=opts,
-                                name=self.name,
-                            )
+                        single_pattern_item = item
 
-                            seq_txts.append(seq_txt)
+                        seq_txt = item.gen(
+                            to_token_name,
+                            to_first_set,
+                            opts=opts,
+                            name=self.name,
+                        )
+
+                        seq_txts.append(seq_txt)
                     else:
                         if isinstance(item, Code):
                             seq_txt = item.gen(
@@ -364,8 +364,8 @@ class SeqExpr(AstNode):
 
             if has_empty_pattern:
                 continue
-            else:
-                break
+
+            break
         else:
             first_set.add(EMPTY_PATTERN_INFO)
 

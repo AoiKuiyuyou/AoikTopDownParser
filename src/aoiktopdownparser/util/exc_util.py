@@ -35,6 +35,5 @@ else:
     def raise_(exc, tb=None):
         if tb is not None and exc.__traceback__ is not tb:
             raise exc.with_traceback(tb)
-        else:
-            raise exc
+        raise exc
 # ----- END -----

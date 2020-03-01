@@ -411,8 +411,8 @@ def get_single_pattern(item):
                     single_pattern_item = None
 
                     break
-                else:
-                    single_pattern_item = child_item
+
+                single_pattern_item = child_item
             elif not isinstance(child_item, Code):
                 single_pattern_item = None
 
