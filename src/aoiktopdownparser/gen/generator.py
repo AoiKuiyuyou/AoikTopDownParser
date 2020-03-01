@@ -5,6 +5,9 @@ import json
 
 from ..util.indent_util import add_indent
 from ..util.path_util import join_file_paths
+from ..util.str_util import EMPTY_USTR
+from ..util.str_util import NEWLINE_USTR
+from ..util.str_util import to_ustr
 from .ast import EMPTY_PATTERN_INFO
 from .ast import Code
 from .ast import Pattern
@@ -75,6 +78,8 @@ def get_parser_txt(rules, tplt_text, opts):
 
     unnamed_pattern_token_names = []
 
+    format_str = to_ustr('_token_{0}')
+
     while True:
         pattern_number = 0
 
@@ -82,7 +87,7 @@ def get_parser_txt(rules, tplt_text, opts):
             while True:
                 pattern_number += 1
 
-                token_name = '_token_{}'.format(
+                token_name = format_str.format(
                     str(pattern_number).zfill(zfill_len)
                 )
 
@@ -219,7 +224,7 @@ def get_parser_txt(rules, tplt_text, opts):
 
     if entry_rule_name:
         if entry_rule is None:
-            msg = 'Entry rule not found: `{}`.'.format(entry_rule_name)
+            msg = to_ustr('Entry rule not found: `{0}`.').format(entry_rule_name)
 
             raise ValueError(msg)
 
@@ -242,7 +247,7 @@ def get_parser_txt(rules, tplt_text, opts):
         sort_keys=True,
     )
 
-    first_set_mapping_text = 'TO_FIRST_SET = {0}'.format(
+    first_set_mapping_text = to_ustr('TO_FIRST_SET = {0}').format(
         first_set_mapping_text
     )
 
@@ -256,14 +261,14 @@ def get_parser_txt(rules, tplt_text, opts):
         sort_keys=True,
     )
 
-    follow_set_mapping_text = 'TO_FOLLOW_SET = {0}'.format(
+    follow_set_mapping_text = to_ustr('TO_FOLLOW_SET = {0}').format(
         follow_set_mapping_text
     )
 
     map_ss_key_to_value[SS_RULE_FOLLOW_SET_MAPPING] = follow_set_mapping_text
 
     #
-    rule_funcs_txt = '\n\n'.join(rule_func_txts)
+    rule_funcs_txt = to_ustr('\n\n').join(rule_func_txts)
 
     rule_funcs_txt = add_indent(rule_funcs_txt)
 
@@ -286,6 +291,12 @@ def get_parser_txt(rules, tplt_text, opts):
     for pattern_info, token_name in to_token_name.items():
         token_name_to_pattern_info[token_name] = pattern_info
 
+    zero_ustr = to_ustr('0')
+
+    format_str1 = to_ustr('(\'{0}\', re.compile({1})),')
+
+    format_str2 = to_ustr('(\'{0}\', re.compile({1}, {2})),')
+
     for rule in rules:
         token_name = rule.name
 
@@ -294,13 +305,13 @@ def get_parser_txt(rules, tplt_text, opts):
         if pattern_info is None:
             continue
 
-        if pattern_info[1] == u'0':
-            reo_txt = u'(\'{0}\', re.compile({1})),'.format(
+        if pattern_info[1] == zero_ustr:
+            reo_txt = format_str1.format(
                 token_name,
                 pattern_info[0],
             )
         else:
-            reo_txt = u'(\'{0}\', re.compile({1}, {2})),'.format(
+            reo_txt = format_str2.format(
                 token_name,
                 pattern_info[0],
                 pattern_info[1],
@@ -311,16 +322,18 @@ def get_parser_txt(rules, tplt_text, opts):
     for token_name in unnamed_pattern_token_names:
         pattern_info = token_name_to_pattern_info[token_name]
 
-        reo_txt = u'(\'{0}\', re.compile({1})),'.format(
+        reo_txt = format_str1.format(
             token_name,
             pattern_info[0],
         )
 
         reo_txts.append(reo_txt)
 
-    reos_txt = u'_TOKEN_NAME_TO_REGEX_OBJ = OrderedDict([\n{0}\n])\n'.format(
-        add_indent('\n'.join(reo_txts))
-    )
+    reos_txt = to_ustr('_TOKEN_NAME_AND_REGEX_OBJ_TUPLES = [\n{0}\n]\n')\
+        .format(
+            add_indent(to_ustr('\n').join(reo_txts))
+        )
+
     reos_txt = add_indent(reos_txt)
 
     map_ss_key_to_value[SS_RULE_REOS] = reos_txt
@@ -333,11 +346,11 @@ def get_parser_txt(rules, tplt_text, opts):
 
         methods_txt = open(methods_file_path).read()
 
-        methods_txt = '\n' + add_indent(methods_txt) + '\n'
+        methods_txt = NEWLINE_USTR + add_indent(methods_txt) + NEWLINE_USTR
 
         map_ss_key_to_value[SS_BACKTRACKING_FUNCS] = methods_txt
     else:
-        map_ss_key_to_value[SS_BACKTRACKING_FUNCS] = ''
+        map_ss_key_to_value[SS_BACKTRACKING_FUNCS] = EMPTY_USTR
 
     #
     parser_txt = replace_ss_keys(tplt_text, map_ss_key_to_value)
@@ -345,11 +358,13 @@ def get_parser_txt(rules, tplt_text, opts):
     #
     lines = []
 
-    for line in parser_txt.split('\n'):
-        line = line.rstrip(' \t')
+    strip_chars = to_ustr(' \t')
+
+    for line in parser_txt.split(NEWLINE_USTR):
+        line = line.rstrip(strip_chars)
         lines.append(line)
 
-    parser_txt = '\n'.join(lines)
+    parser_txt = NEWLINE_USTR.join(lines)
 
     return parser_txt
 
@@ -380,7 +395,9 @@ def get_single_pattern(item):
 
 
 def replace_ss_keys(txt, spec):
+    format_str = to_ustr('{%s}')
+
     for key, value in spec.items():
-        txt = txt.replace('{%s}' % key, value)
+        txt = txt.replace(format_str % key, value)
 
     return txt

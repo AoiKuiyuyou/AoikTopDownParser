@@ -1,8 +1,11 @@
 # coding: utf-8
 from __future__ import absolute_import
 
+from .str_util import NEWLINE_USTR
+from .str_util import SPACE_USTR
 
-def add_indent(txt, step=1, indent=' ' * 4):
+
+def add_indent(txt, step=1, indent=SPACE_USTR * 4):
     lines = txt.splitlines()
 
     spaces_count = 0
@@ -10,7 +13,7 @@ def add_indent(txt, step=1, indent=' ' * 4):
         spaces_count = 0
         found = False
         for char in line:
-            if char != ' ':
+            if char != SPACE_USTR:
                 found = True
                 break
             spaces_count += 1
@@ -28,4 +31,4 @@ def add_indent(txt, step=1, indent=' ' * 4):
 
     prefix = indent * step
 
-    return '\n'.join(prefix + x for x in lines)
+    return NEWLINE_USTR.join(prefix + x for x in lines)

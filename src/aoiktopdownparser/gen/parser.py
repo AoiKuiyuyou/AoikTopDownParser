@@ -3,7 +3,6 @@ from __future__ import absolute_import
 
 from argparse import ArgumentParser
 import codecs
-from collections import OrderedDict
 from pprint import pformat
 import re
 import sys
@@ -238,7 +237,7 @@ class Parser(object):
 
     WHITESPACE_TOKEN_NAME = ''
 
-    _TOKEN_NAME_TO_REGEX_OBJ = OrderedDict([
+    _TOKEN_NAME_AND_REGEX_OBJ_TUPLES = [
         ('end', re.compile('$')),
         ('comma', re.compile(',')),
         ('colon', re.compile(':')),
@@ -265,7 +264,7 @@ class Parser(object):
         ('rule_name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=:)')),
         ('name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!:)')),
         ('code', re.compile(r'(`+)((?:.|\n)*?)\1')),
-    ])
+    ]
 
     def __init__(self, txt, debug=False):
         self._txt = txt
@@ -324,12 +323,10 @@ class Parser(object):
 
         txt_len = len(self._txt)
 
-        regex_objs = list(self._TOKEN_NAME_TO_REGEX_OBJ.items())
-
         while self._pos <= txt_len:
             self._make_whitespace_token()
 
-            for token_name, regex_obj in regex_objs:
+            for token_name, regex_obj in self._TOKEN_NAME_AND_REGEX_OBJ_TUPLES:
                 match_obj = regex_obj.match(self._txt, self._pos)
 
                 if not match_obj:
@@ -1414,4 +1411,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    exit(main())
+    sys.exit(main())

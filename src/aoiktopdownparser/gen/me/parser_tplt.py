@@ -3,7 +3,6 @@ from __future__ import absolute_import
 
 from argparse import ArgumentParser
 import codecs
-from collections import OrderedDict
 from pprint import pformat
 import re
 import sys
@@ -297,12 +296,10 @@ class Parser(object):
 
         txt_len = len(self._txt)
 
-        regex_objs = list(self._TOKEN_NAME_TO_REGEX_OBJ.items())
-
         while self._pos <= txt_len:
             self._make_whitespace_token()
 
-            for token_name, regex_obj in regex_objs:
+            for token_name, regex_obj in self._TOKEN_NAME_AND_REGEX_OBJ_TUPLES:
                 match_obj = regex_obj.match(self._txt, self._pos)
 
                 if not match_obj:

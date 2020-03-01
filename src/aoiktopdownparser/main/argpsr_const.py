@@ -68,7 +68,7 @@ ARG_ENTRY_RULE_URI_F = '-m'
 ARG_ENTRY_RULE_URI_K = 'ARG_ENTRY_RULE_URI_K'
 ARG_ENTRY_RULE_URI_D = None
 ARG_ENTRY_RULE_URI_V = 'ENTRY_RULE'
-ARG_ENTRY_RULE_URI_H = 'Entry rule. Used with argument {}.'\
+ARG_ENTRY_RULE_URI_H = 'Entry rule. Used with argument {0}.'\
     .format(ARG_SRC_FILE_PATH_F)
 
 

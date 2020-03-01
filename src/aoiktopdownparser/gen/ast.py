@@ -298,7 +298,7 @@ class RuleRef(AstNode):
         rule_def = to_rule_def.get(self.name, None)
 
         if rule_def is None:
-            msg = 'Undefined rule name: `{}`.'.format(self.name)
+            msg = 'Undefined rule name: `{0}`.'.format(self.name)
 
             raise GrammarError(msg)
 
@@ -604,7 +604,7 @@ class AltExpr(AstNode):
                 need_print_code = True
 
             if need_print_code:
-                msg = 'Generated code:\n```\n{}\n```\n'.format(res)
+                msg = 'Generated code:\n```\n{0}\n```\n'.format(res)
 
                 sys.stderr.write(msg)
 
