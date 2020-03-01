@@ -1,7 +1,7 @@
 goal:
     expr
-    end
     `ctx.res = expr.res`
+    end
 
 
 end:
