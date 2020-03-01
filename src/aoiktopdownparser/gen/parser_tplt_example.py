@@ -32,6 +32,7 @@ class LexError(ParsingError):
         pos,
         row,
         col,
+        msg=None,
     ):
         # Input string.
         self.txt = txt
@@ -54,6 +55,9 @@ class LexError(ParsingError):
         # Current column index.
         self.col = col
 
+        # Error message.
+        self.msg = msg
+
     def __str__(self):
         narrow_columns_index = get_narrow_column_index(self.line, self.col)
 
@@ -68,11 +72,13 @@ class LexError(ParsingError):
 
         text = (
             'Lexer failed at row {row}, column {col}, character {pos}.\n'
+            '{msg}'
             '{source_text}'
         ).format(
             row=self.row + 1,
             col=self.col + 1,
             pos=self.pos + 1,
+            msg='' if self.msg is None else self.msg + '\n',
             source_text=source_text,
         )
 
