@@ -79,7 +79,7 @@ def main_imp(args=None):
         tplt_exmaple_file_path = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
             'gen',
-            'parser_tplt.py'
+            'parser_tplt_example.py'
         )
 
         if not os.path.isfile(tplt_exmaple_file_path):
