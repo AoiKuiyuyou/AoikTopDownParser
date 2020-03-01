@@ -2,9 +2,12 @@
 from __future__ import absolute_import
 
 from argparse import ArgumentParser
+import codecs
+from collections import OrderedDict
 from pprint import pformat
 import re
 import sys
+from traceback import format_exc
 from traceback import format_exception
 
 
@@ -13,40 +16,49 @@ class AttrDict(dict):
     __setattr__ = dict.__setitem__
 
 
-class SyntaxError(Exception):
+# Used in backtracking mode.
+class ScanOk(Exception):
+    pass
+
+
+class ParsingError(Exception):
+    pass
+
+
+class LexError(ParsingError):
 
     def __init__(
-        self, ctx, txt, pos, row, col, token_names, eis=None, eisp=None
+        self,
+        txt,
+        pos,
+        row,
+        col,
     ):
-        self.ctx = ctx
-
+        # Input string.
         self.txt = txt
 
+        # Input string length.
+        self.txt_len = len(txt)
+
+        # Input lines.
         self.lines = txt.split('\n')
 
+        # Current line.
         self.line = self.lines[row]
 
+        # Current position index.
         self.pos = pos
 
+        # Current row index.
         self.row = row
 
+        # Current column index.
         self.col = col
 
-        # Expected token names
-        self.token_names = token_names
-
-        # Scan exception infos of current branch
-        self.eis = eis
-
-        # Scan exception infos of previous branch
-        self.eisp = eisp
-
     def __str__(self):
-        ctx_names = get_ctx_names(self.ctx)
+        narrow_columns_index = get_narrow_column_index(self.line, self.col)
 
-        ctx_msg = ' '.join(ctx_names) if ctx_names else ''
-
-        col_mark = ' ' * self.col + '^'
+        col_mark = ' ' * narrow_columns_index + '|'
 
         source_text = (
             '```\n'
@@ -56,8 +68,105 @@ class SyntaxError(Exception):
         ).format(self.line, col_mark)
 
         text = (
-            'Rule `{rule_name}` failed at row {row} column {col} (char {pos}) (ctx: {ctx_msg}).\n'
-            'Expect token `{token_names}`.\n'
+            'Lexer failed at row {row}, column {col}, character {pos}.\n'
+            '{source_text}'
+        ).format(
+            row=self.row + 1,
+            col=self.col + 1,
+            pos=self.pos + 1,
+            source_text=source_text,
+        )
+
+        return text
+
+
+class SyntaxError(ParsingError):
+
+    def __init__(
+        self,
+        ctx,
+        txt,
+        pos,
+        row,
+        col,
+        token_name=None,
+        token_names=[],
+        eis=None,
+        eisp=None,
+        msg=None,
+    ):
+        # Current context.
+        self.ctx = ctx
+
+        # Input string.
+        self.txt = txt
+
+        # Input lines.
+        self.lines = txt.split('\n')
+
+        # Current line.
+        self.line = self.lines[row]
+
+        # Current position index.
+        self.pos = pos
+
+        # Current row index.
+        self.row = row
+
+        # Current column index.
+        self.col = col
+
+        # Current token name.
+        self.current_token_name = token_name
+
+        # Wanted token names.
+        self.wanted_token_names = token_names
+
+        # Scanning exception infos of current branch.
+        self.eis = eis
+
+        # Scanning exception infos of previous branch.
+        self.eisp = eisp
+
+        # Error message.
+        self.msg = msg
+
+    def __str__(self):
+        ctx_names = get_ctx_names(self.ctx)
+
+        ctx_msg = ' '.join(ctx_names) if ctx_names else ''
+
+        msg = self.msg
+
+        if msg is None:
+            msg = ''
+
+            if self.wanted_token_names:
+                msg += 'Wanted tokens: `{0}`。\n'.format(
+                    ' | '.join(self.wanted_token_names)
+                )
+
+            msg += (
+                'Met token: `{0}`。\n'.format(self.current_token_name)\
+                if self.current_token_name is not None\
+                else 'end-of-input。\n'
+            )
+
+        narrow_columns_index = get_narrow_column_index(self.line, self.col)
+
+        col_mark = ' ' * narrow_columns_index + '|'
+
+        source_text = (
+            '```\n'
+            '{0}\n'
+            '{1}\n'
+            '```'
+        ).format(self.line, col_mark)
+
+        text = (
+            'Rule `{rule_name}` failed at row {row}, column {col},' +\
+            ' character {pos}.\nContext: {ctx_msg}.\n' +\
+            msg +\
             '{source_text}'
         ).format(
             rule_name=self.ctx.name,
@@ -65,64 +174,66 @@ class SyntaxError(Exception):
             row=self.row + 1,
             col=self.col + 1,
             pos=self.pos + 1,
-            token_names=' | '.join(self.token_names),
             source_text=source_text,
         )
 
         return text
 
 
-# Used in backtracking mode.
-class ScanOk(Exception):
-    pass
-
-
 class Parser(object):
 
     _RULE_FUNC_PRF = '{SS_RULE_FUNC_NAME_PRF}'
+
     _RULE_FUNC_POF = '{SS_RULE_FUNC_NAME_POF}'
 
-    # `SK` means state dict key
+    # `SK` means state dict key.
     #
-    # Text to parse
-    _SK_TXT = 'txt'
+    # Position index.
+    _SK_POS = 'pos'
 
-    # Row number (0-based)
+    # Row index.
     _SK_ROW = 'row'
 
-    # Column number (0-based)
+    # Column index.
     _SK_COL = 'col'
 
-    # Repeated occurrence
+    # Repeated occurrence.
     _SK_OCC = 'occ'
 
-    # `DK` means debug dict key
+    # Token index.
+    _SK_TOK_IDX = 'tok_idx'
+
+    # `DK` means debug dict key.
     #
-    # Rule name
+    # Rule name.
     _DK_NAME = 'name'
 
-    # Text to parse
+    # Input string.
     _DK_TXT = 'txt'
 
-    # Position number (0-based)
+    # Position index.
     _DK_POS = 'pos'
 
-    # Row number (0-based)
+    # Row index.
     _DK_ROW = 'row'
 
-    # Column number (0-based)
+    # Column index.
     _DK_COL = 'col'
 
-    # Scan level
+    # Scanning level.
     _DK_SLV = 'slv'
 
-    # Scan is success
+    # Scanning is successful.
     _DK_SSS = 'sss'
+
+    WHITESPACE_TOKEN_NAME = ''
 
 {SS_RULE_REOS}
 
     def __init__(self, txt, debug=False):
         self._txt = txt
+
+        self._txt_len = len(txt)
 
         self._pos = 0
 
@@ -145,6 +256,15 @@ class Parser(object):
         # Current rule func's context dict
         self._ctx = None
 
+        # Tokens
+        self._tokens = []
+
+        # Tokens count
+        self._tokens_count = 0
+
+        # Current token index
+        self._token_index = 0
+
         # Scan level
         self._scan_lv = -1
 
@@ -157,16 +277,245 @@ class Parser(object):
         # Scan exc infos of previous branching
         self._scan_eis_prev = []
 
+        # Backtracking state stack.
         self._state_stack = []
 
+    def _make_tokens(self):
+        self._pos = 0
+        self._row = 0
+        self._col = 0
+
+        txt_len = len(self._txt)
+
+        regex_objs = list(self._TOKEN_NAME_TO_REGEX_OBJ.items())
+
+        while self._pos <= txt_len:
+            self._make_whitespace_token()
+
+            for token_name, regex_obj in regex_objs:
+                match_obj = regex_obj.match(self._txt, self._pos)
+
+                if not match_obj:
+                    continue
+
+                matched_txt = match_obj.group()
+
+                matched_len = len(matched_txt)
+
+                if matched_len > 0\
+                or regex_obj.pattern == '$':
+                    self._add_token(token_name, matched_txt, match_obj)
+
+                    if regex_obj.pattern == '$':
+                        # Make the loop stop.
+                        self._pos = txt_len + 1
+
+                    break
+            else:
+                if self._pos < txt_len:
+                    raise LexError(
+                        txt=self._txt,
+                        pos=self._pos,
+                        row=self._row,
+                        col=self._col,
+                    )
+
+        self._pos = 0
+        self._row = 0
+        self._col = 0
+
+        self._tokens_count = len(self._tokens)
+
+    def _make_whitespace_token(self):
+        match_obj = self._ws_reo.match(self._txt, self._pos)
+
+        if match_obj:
+            matched_txt = match_obj.group()
+
+            if not matched_txt:
+                return
+
+            self._add_token(self.WHITESPACE_TOKEN_NAME, matched_txt, match_obj)
+
+    def _add_token(self, token_name, matched_txt, match_obj):
+        token_info = AttrDict()
+
+        token_info.pos = self._pos
+
+        token_info.row = self._row
+
+        token_info.col = self._col
+
+        token_info.txt = matched_txt
+
+        token_info.len = len(matched_txt)
+
+        token_info.rows_count = matched_txt.count('\n') + 1
+
+        token_info.end_row = token_info.row + token_info.rows_count - 1
+
+        if token_info.rows_count == 1:
+            token_info.end_col = token_info.col + len(matched_txt)
+        else:
+            last_row_txt = matched_txt[matched_txt.rfind('\n') + 1:]
+
+            token_info.end_col = len(last_row_txt)
+
+        token_info.match_obj = match_obj
+
+        self._tokens.append((token_name, token_info))
+
+        self._update_pos_row_col(token_info)
+
+    def _update_pos_row_col(self, token_info):
+        self._pos = token_info.pos + token_info.len
+
+        matched_txt = token_info.txt
+
+        row_cnt = matched_txt.count('\n')
+
+        if row_cnt == 0:
+            self._row = token_info.row
+
+            self._col = token_info.col + len(matched_txt)
+        else:
+            last_row_txt = matched_txt[matched_txt.rfind('\n') + 1:]
+
+            self._row = token_info.row + row_cnt
+
+            self._col = len(last_row_txt)
+
+    def _get_row_col(self, token_index=None, skip_whitespace=False):
+        if self._tokens_count == 0:
+            raise ValueError(self._tokens_count)
+
+        if token_index is None:
+            token_index = self._token_index
+
+        if token_index > self._tokens_count:
+            raise ValueError(token_index)
+
+        if skip_whitespace:
+            while True:
+                if token_index > self._tokens_count:
+                    raise ValueError(token_index)
+                elif token_index == self._tokens_count:
+                    _, last_token_info = self._tokens[-1]
+
+                    return (
+                        last_token_info.end_row,
+                        last_token_info.end_col
+                    )
+
+                token_name, token_info = self._tokens[token_index]
+
+                if token_name == self.WHITESPACE_TOKEN_NAME:
+                    token_index += 1
+
+                    continue
+
+                break
+
+            return (token_info.row, token_info.col)
+        else:
+            if token_index == self._tokens_count:
+                _, last_token_info = self._tokens[-1]
+
+                return (
+                    last_token_info.end_row,
+                    last_token_info.end_col
+                )
+
+            _, token_info = self._tokens[token_index]
+
+            return (token_info.row, token_info.col)
+
+    def _get_start_row_col(self):
+        row, col = self._get_row_col(skip_whitespace=True)
+        return (row + 1, col + 1)
+
+    def _get_end_row_col(self):
+        row, col = self._get_row_col(skip_whitespace=False)
+        return (row + 1, col + 1)
+
+    def _get_token_index(self, skip_whitespace=True):
+        token_index = self._token_index
+
+        if skip_whitespace:
+            while True:
+                if token_index >= self._tokens_count:
+                    return None
+
+                current_token_name, _ = self._tokens[token_index]
+
+                if current_token_name == self.WHITESPACE_TOKEN_NAME:
+                    token_index += 1
+
+                    continue
+
+                break
+        else:
+            if token_index >= self._tokens_count:
+                return None
+
+        return token_index
+
+    def _get_ctx_attr(self, ctx, attr_name, default=None):
+        try:
+            return ctx[attr_name]
+        except KeyError:
+            return default
+
+    def _seek(self, token_index):
+        if token_index < 0 or token_index >= self._txt_len:
+            raise ValueError(token_index)
+
+        _, token_info = self._tokens[token_index]
+
+        self._pos = token_info.pos
+        self._row = token_info.row
+        self._col = token_info.col
+
+    def _retract(self, token_index=None):
+        if token_index is None:
+            token_index = self._token_index
+
+        while True:
+            if token_index == 0:
+                break
+
+            token_index -= 1
+
+            if token_index < 0:
+                raise ValueError(token_index)
+
+            token_name, _ = self._tokens[
+                token_index
+            ]
+
+            if token_name != self.WHITESPACE_TOKEN_NAME:
+                break
+
+        self._seek(token_index)
+
     def _peek(self, token_names, is_required=False, is_branch=False):
-        for token_name in token_names:
-            regex_obj = self._TOKEN_NAME_TO_REGEX_OBJ[token_name]
+        token_index = self._token_index
 
-            matched = regex_obj.match(self._txt, self._pos)
+        while True:
+            if token_index >= self._tokens_count:
+                return None
 
-            if matched:
-                return token_name
+            current_token_name, token_info = self._tokens[token_index]
+
+            if current_token_name == self.WHITESPACE_TOKEN_NAME:
+                token_index += 1
+
+                continue
+
+            break
+
+        if current_token_name in token_names:
+            return current_token_name
 
         if is_required:
             self._error(token_names=token_names)
@@ -174,12 +523,29 @@ class Parser(object):
             return None
 
     def _scan_token(self, token_name, new_ctx=False):
-        regex_obj = self._TOKEN_NAME_TO_REGEX_OBJ[token_name]
+        while True:
+            if self._token_index >= self._tokens_count:
+                self._error(token_names=[token_name])
 
-        matched = self._match(regex_obj)
+            current_token_name, token_info = self._tokens[
+                self._token_index
+            ]
 
-        if matched is None:
+            if current_token_name == self.WHITESPACE_TOKEN_NAME:
+                self._token_index += 1
+
+                self._update_pos_row_col(token_info)
+
+                continue
+
+            break
+
+        if current_token_name != token_name:
             self._error(token_names=[token_name])
+
+        self._token_index += 1
+
+        self._update_pos_row_col(token_info)
 
         if new_ctx:
             ctx = AttrDict()
@@ -190,7 +556,7 @@ class Parser(object):
         else:
             ctx = self._ctx
 
-        ctx.res = matched
+        ctx.res = token_info
 
         return ctx
 
@@ -198,9 +564,6 @@ class Parser(object):
         ctx_par = self._ctx
 
         self._scan_lv += 1
-
-        if self._ws_reo:
-            self._match(self._ws_reo)
 
         ctx_new = AttrDict()
 
@@ -212,7 +575,6 @@ class Parser(object):
 
         rule_func = self._rule_func_get(name)
 
-        # Scan exc info
         self._scan_ei = None
 
         if self._debug:
@@ -246,39 +608,7 @@ class Parser(object):
 
             self._ctx = ctx_par
 
-        if self._ws_reo:
-            self._match(self._ws_reo)
-
         return ctx_new
-
-    def _match(self, regex_obj):
-        matched = regex_obj.match(self._txt, self._pos)
-
-        if matched:
-            matched_txt = matched.group()
-
-            matched_len = len(matched_txt)
-
-            if matched_len > 0:
-                self._pos += matched_len
-
-                self._update_state(matched_txt)
-
-        return matched
-
-    def _update_state(self, matched_txt):
-        row_cnt = matched_txt.count('\n')
-
-        if row_cnt == 0:
-            last_row_txt = matched_txt
-
-            self._col += len(last_row_txt)
-        else:
-            last_row_txt = matched_txt[matched_txt.rfind('\n') + 1:]
-
-            self._row += row_cnt
-
-            self._col = len(last_row_txt)
 
     def _rule_func_get(self, name):
         rule_func_name = self._RULE_FUNC_PRF + name + self._RULE_FUNC_POF
@@ -287,16 +617,29 @@ class Parser(object):
 
         return rule_func
 {SS_BACKTRACKING_FUNCS}
-    def _error(self, token_names):
+    def _error(self, msg=None, token_names=None):
+        token_index = self._get_token_index(skip_whitespace=True)
+
+        if token_index is None:
+            token_name = None
+        else:
+            token_name, info = self._tokens[token_index]
+
+            self._pos = info.pos
+            self._row = info.row
+            self._col = info.col
+
         raise SyntaxError(
             ctx=self._ctx,
             txt=self._txt,
             pos=self._pos,
             row=self._row,
             col=self._col,
+            token_name=token_name,
             token_names=token_names,
             eis=self._scan_eis,
             eisp=self._scan_eis_prev,
+            msg=msg,
         )
 
 {SS_RULE_FUNCS}
@@ -316,6 +659,8 @@ def parse(txt, rule=None, debug=False):
     exc_info = None
 
     try:
+        parser._make_tokens()
+
         parsing_result = parser._scan_rule(rule)
     except Exception:
         exc_info = sys.exc_info()
@@ -332,7 +677,7 @@ def debug_infos_to_msg(debug_infos, txt):
         row_txt = rows[debug_info.row]
 
         msg = '{indent}{error_sign}{name}: {row}.{col} ({pos}): {txt}'.format(
-            indent='    ' * debug_info.slv,
+            indent='  ' * debug_info.slv,
             error_sign='' if debug_info.sss else '!',
             name=debug_info.name,
             row=debug_info.row + 1,
@@ -361,12 +706,15 @@ def parsing_error_to_msg(
 
     exc = exc_info[1]
 
+    if isinstance(exc, lex_error_class):
+        return '{0}\n{1}'.format(title, str(exc))
+
     if not isinstance(exc, syntax_error_class):
         tb_lines = format_exception(*exc_info)
 
         tb_msg = ''.join(tb_lines)
 
-        msg += '\n---\n{}---\n'.format(tb_msg)
+        msg += '\n---\n{0}---\n'.format(tb_msg)
 
         return msg
 
@@ -386,6 +734,8 @@ def parsing_error_to_msg(
         reason_exc_infos.extend(ei for ei in exc.eis if ei[1] is not exc)
 
     if reason_exc_infos:
+        rows = txt.split('\n')
+
         msg = 'Possible reasons:'
 
         msgs.append(msg)
@@ -402,11 +752,14 @@ def parsing_error_to_msg(
 
             row_txt = rows[exc.row]
 
-            col_mark = ' ' * exc.col + '^'
+            narrow_columns_index = get_narrow_column_index(row_txt, exc.col)
+
+            col_mark = ' ' * narrow_columns_index + '|'
 
             msg = (
-                'Rule `{rule}` failed at {row}.{col} ({pos})'
-                ' (ctx: {ctx_msg}):\n'
+                'Rule `{rule}` failed at row {row}, column {col},'
+                ' character {pos}.\n'
+                ' Context: {ctx_msg}.\n'
                 '```\n'
                 '{row_txt}\n'
                 '{col_mark}\n'
@@ -450,6 +803,48 @@ def get_ctx_names(ctx):
     return ctx_names
 
 
+WIDE_CHARS_REO = re.compile(
+    '[\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
+)
+
+NON_WIDE_CHARS_REO = re.compile(
+    '[^\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
+)
+
+def get_narrow_column_index(row_txt, column_index):
+    if WIDE_CHARS_REO is None:
+        return column_index
+
+    row_txt = row_txt[:column_index]
+
+    row_txt_count = len(row_txt)
+
+    narrow_column_index = 0
+
+    current_index = 0
+
+    while current_index < row_txt_count:
+        match_obj = WIDE_CHARS_REO.match(row_txt, current_index)
+
+        if match_obj:
+            chars_count = len(match_obj.group())
+
+            narrow_column_index += chars_count * 2
+
+            current_index += chars_count
+
+        match_obj = NON_WIDE_CHARS_REO.match(row_txt, current_index)
+
+        if match_obj:
+            chars_count = len(match_obj.group())
+
+            narrow_column_index += chars_count
+
+            current_index += chars_count
+
+    return narrow_column_index
+
+
 def main(args=None):
     args_parser = ArgumentParser()
 
@@ -466,9 +861,12 @@ def main(args=None):
     source_file_path = args_obj.source_file_path
 
     try:
-        rules_txt = open(source_file_path).read()
+        rules_txt = codecs.open(source_file_path, encoding='utf-8').read()
     except Exception:
-        msg = 'Failed reading source file: `{0}`\n'.format(source_file_path)
+        msg = 'Failed reading source file: `{0}`\n---\n{1}---\n'.format(
+            source_file_path,
+            format_exc(),
+        )
 
         sys.stderr.write(msg)
 
@@ -492,6 +890,7 @@ def main(args=None):
     if exc_info is not None:
         msg = parsing_error_to_msg(
             exc_info=exc_info,
+            lex_error_class=LexError,
             syntax_error_class=SyntaxError,
             title='# ----- Parsing error -----',
             txt=rules_txt,
@@ -511,4 +910,4 @@ def main(args=None):
 
 
 if __name__ == '__main__':
-    exit(main())
+    sys.exit(main())
