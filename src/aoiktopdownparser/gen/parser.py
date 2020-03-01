@@ -779,7 +779,7 @@ class Parser(object):
             ctx.res = eval(string.res.txt)
             # ```
         else:
-            self._error([
+            self._error(token_names=[
             'number',
             'string',
             'boolean',
@@ -814,7 +814,7 @@ class Parser(object):
         elif self._peek(['name'], is_branch=True):
             args_list_item = self._scan_rule('args_list_item')  # noqa
         else:
-            self._error([
+            self._error(token_names=[
             'name',
             'parenthesis_end'])
 
@@ -835,11 +835,11 @@ class Parser(object):
             elif self._peek(['name'], is_branch=True):
                 args_list_item = self._scan_rule('args_list_item')  # noqa
             else:
-                self._error([
+                self._error(token_names=[
                 'name',
                 'parenthesis_end'])
         else:
-            self._error([
+            self._error(token_names=[
             'parenthesis_end',
             'comma'])
 
@@ -1026,7 +1026,7 @@ class Parser(object):
                     occ_type = 2
                     # ```
                 else:
-                    self._error([
+                    self._error(token_names=[
                     'occ0m_trailer',
                     'occ1m_trailer',
                     'occ01_trailer'])
@@ -1068,7 +1068,7 @@ class Parser(object):
                 raise ValueError(occ_type)
             # ```
         else:
-            self._error([
+            self._error(token_names=[
             'string',
             'name',
             'parenthesis_start',
@@ -1132,7 +1132,7 @@ class Parser(object):
             ctx.res = group.res
             # ```
         else:
-            self._error([
+            self._error(token_names=[
             'string',
             'name',
             'parenthesis_start'])

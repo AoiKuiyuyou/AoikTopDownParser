@@ -581,7 +581,7 @@ class AltExpr(AstNode):
             token_names = [to_token_name[x] for x in pattern_infos]
 
             txts.append('else:')
-            txts.append('    self._error({0})'.format(
+            txts.append('    self._error(token_names={0})'.format(
                 format_args(token_names)
             ))
 
