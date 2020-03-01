@@ -474,6 +474,8 @@ class Parser(object):
         if token_index < 0 or token_index >= self._txt_len:
             raise ValueError(token_index)
 
+        self._token_index = token_index
+
         _, token_info = self._tokens[token_index]
 
         self._pos = token_info.pos
