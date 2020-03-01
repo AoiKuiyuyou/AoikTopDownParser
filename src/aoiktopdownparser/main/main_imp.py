@@ -2,9 +2,9 @@
 from __future__ import absolute_import
 
 import codecs
-import functools
 import os.path
 from pprint import pformat
+from shutil import copyfile
 import sys
 from traceback import format_exc
 
@@ -32,12 +32,14 @@ from .argpsr_const import ARG_PSR_FILE_PATH_K
 from .argpsr_const import ARG_RULES_FILE_PATH_K
 from .argpsr_const import ARG_RULES_PSR_DEBUG_K
 from .argpsr_const import ARG_SRC_FILE_PATH_K
+from .argpsr_const import ARG_TPLT_EXAMPLE_PATH_K
 from .argpsr_const import ARG_TPLT_FILE_PATH_K
 from .argpsr_const import ARG_VER_ON_K
 from .main_const import MAIN_RET_V_EXT_OPTS_LOAD_ERR
 from .main_const import MAIN_RET_V_PSR_CODE_CALL_ERR
 from .main_const import MAIN_RET_V_PSR_CODE_LOAD_ERR
 from .main_const import MAIN_RET_V_PSR_CODE_WRITE_FILE_ERR
+from .main_const import MAIN_RET_V_PSR_TPLT_EXAMPLE_FILE_CREATE_ERR
 from .main_const import MAIN_RET_V_PSR_TPLT_FILE_READ_ERR
 from .main_const import MAIN_RET_V_RULES_FILE_READ_ERR
 from .main_const import MAIN_RET_V_RULES_PARSE_ERR
@@ -71,32 +73,63 @@ def main_imp(args=None):
 
     debug_on = True
 
-    rules_file_path = getattr(args_obj, ARG_RULES_FILE_PATH_K)
+    tplt_exmaple_output_path = getattr(args_obj, ARG_TPLT_EXAMPLE_PATH_K)
 
-    if rules_file_path is not None:
-        try:
-            rules_txt = codecs.open(rules_file_path, encoding='utf-8').read()
-        except Exception:
-            msg = '# Error\nFailed reading rules file.\n'\
-                'File path is `{}`.\n'\
-                .format(rules_file_path)
+    if tplt_exmaple_output_path is not None:
+        tplt_exmaple_file_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+            'gen',
+            'parser_tplt.py'
+        )
+
+        if not os.path.isfile(tplt_exmaple_file_path):
+            msg = '# Error\nParser template example file not exists.\n'\
+                'File path is `{0}`.\n'\
+                .format(tplt_exmaple_file_path)
 
             sys.stderr.write(msg)
 
-            if debug_on:
-                sys.stderr.write('---\n{}---\n'.format(format_exc()))
+            return MAIN_RET_V_PSR_TPLT_EXAMPLE_FILE_CREATE_ERR
 
-            return MAIN_RET_V_RULES_FILE_READ_ERR
-    else:
-        assert 0
+        try:
+            copyfile(tplt_exmaple_file_path, tplt_exmaple_output_path)
+        except Exception:
+            if debug_on:
+                sys.stderr.write('---\n{0}---\n'.format(format_exc()))
+
+            return MAIN_RET_V_PSR_TPLT_EXAMPLE_FILE_CREATE_ERR
+
+        msg = 'Created parser template example file: `{0}`.\n'.format(
+            tplt_exmaple_output_path
+        )
+
+        sys.stderr.write(msg)
+
+        return 0
+
+    rules_file_path = getattr(args_obj, ARG_RULES_FILE_PATH_K)
+
+    if rules_file_path is None:
+        raise ValueError(rules_file_path)
+
+    try:
+        rules_txt = codecs.open(rules_file_path, encoding='utf-8').read()
+    except Exception:
+        msg = '# Error\nFailed reading rules file.\n'\
+            'File path is `{0}`.\n'\
+            .format(rules_file_path)
+
+        sys.stderr.write(msg)
+
+        if debug_on:
+            sys.stderr.write('---\n{0}---\n'.format(format_exc()))
+
+        return MAIN_RET_V_RULES_FILE_READ_ERR
 
     tplt_file_path = getattr(args_obj, ARG_TPLT_FILE_PATH_K)
 
     if tplt_file_path is None:
-        tplt_file_path = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            'gen/parser_tplt.py'
-        )
+        raise ValueError(tplt_file_path)
 
     tplt_file_path = os.path.join('.', tplt_file_path)
 
@@ -119,7 +152,7 @@ def main_imp(args=None):
         sys.stderr.write(msg)
 
         if debug_on:
-            sys.stderr.write('---\n{}---\n'.format(format_exc()))
+            sys.stderr.write('---\n{0}---\n'.format(format_exc()))
 
         return MAIN_RET_V_TPLT_FILE_READ_ERR
 
@@ -140,13 +173,13 @@ def main_imp(args=None):
             )
         except Exception:
             msg = '# Error\nFailed loading opts dict.\n'\
-                'URI is `{}`.\n'\
+                'URI is `{0}`.\n'\
                 .format(ext_opts_uri)
 
             sys.stderr.write(msg)
 
             if debug_on:
-                sys.stderr.write('---\n{}---\n'.format(format_exc()))
+                sys.stderr.write('---\n{0}---\n'.format(format_exc()))
 
             return MAIN_RET_V_EXT_OPTS_LOAD_ERR
 
@@ -214,7 +247,7 @@ def main_imp(args=None):
         sys.stderr.write(msg)
 
         if debug_on:
-            sys.stderr.write('---\n{}---\n'.format(format_exc()))
+            sys.stderr.write('---\n{0}---\n'.format(format_exc()))
 
         return MAIN_RET_V_PSR_TPLT_FILE_READ_ERR
 
@@ -235,47 +268,45 @@ def main_imp(args=None):
 
             except Exception:
                 msg = '# Error\nFailed creating parser file.\n'\
-                    + 'File path is `{}`.\n'\
+                    + 'File path is `{0}`.\n'\
                     .format(parser_output_file_path)
 
                 sys.stderr.write(msg)
 
                 if debug_on:
-                    sys.stderr.write('---\n{}---\n'.format(format_exc()))
+                    sys.stderr.write('---\n{0}---\n'.format(format_exc()))
 
                 return MAIN_RET_V_PSR_CODE_WRITE_FILE_ERR
 
-            msg = 'Generated parser file: `{}`.\n'\
+            msg = 'Generated parser file: `{0}`.\n'\
                 .format(parser_output_file_path)
 
             sys.stderr.write(msg)
 
             return 0
 
-        assert 0
-
     src_file_path = getattr(args_obj, ARG_SRC_FILE_PATH_K)
 
     src_txt = None
 
-    if src_file_path is not None:
-        try:
-            src_file = codecs.open(src_file_path, encoding='utf-8')
+    if src_file_path is None:
+        raise ValueError(src_file_path)
 
-            src_txt = src_file.read()
-        except Exception:
-            msg = '# Error\nFailed reading source data file.\n'\
-                + 'File path is `{}`.\n'\
-                .format(src_file_path)
+    try:
+        src_file = codecs.open(src_file_path, encoding='utf-8')
 
-            sys.stderr.write(msg)
+        src_txt = src_file.read()
+    except Exception:
+        msg = '# Error\nFailed reading source data file.\n'\
+            + 'File path is `{0}`.\n'\
+            .format(src_file_path)
 
-            if debug_on:
-                sys.stderr.write('---\n{}---\n'.format(format_exc()))
+        sys.stderr.write(msg)
 
-            return MAIN_RET_V_SRC_FILE_READ_ERR
-    else:
-        assert 0
+        if debug_on:
+            sys.stderr.write('---\n{0}---\n'.format(format_exc()))
+
+        return MAIN_RET_V_SRC_FILE_READ_ERR
 
     try:
         parser_mod = import_code(
@@ -288,7 +319,7 @@ def main_imp(args=None):
         sys.stderr.write(msg)
 
         if debug_on:
-            sys.stderr.write('---\n{}---\n'.format(format_exc()))
+            sys.stderr.write('---\n{0}---\n'.format(format_exc()))
 
         return MAIN_RET_V_PSR_CODE_LOAD_ERR
 

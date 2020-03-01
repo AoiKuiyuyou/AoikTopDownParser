@@ -48,6 +48,11 @@ from .argpsr_const import ARG_SRC_FILE_PATH_F
 from .argpsr_const import ARG_SRC_FILE_PATH_H
 from .argpsr_const import ARG_SRC_FILE_PATH_K
 from .argpsr_const import ARG_SRC_FILE_PATH_V
+from .argpsr_const import ARG_TPLT_EXAMPLE_PATH_D
+from .argpsr_const import ARG_TPLT_EXAMPLE_PATH_F
+from .argpsr_const import ARG_TPLT_EXAMPLE_PATH_H
+from .argpsr_const import ARG_TPLT_EXAMPLE_PATH_K
+from .argpsr_const import ARG_TPLT_EXAMPLE_PATH_V
 from .argpsr_const import ARG_TPLT_FILE_PATH_D
 from .argpsr_const import ARG_TPLT_FILE_PATH_F
 from .argpsr_const import ARG_TPLT_FILE_PATH_H
@@ -82,6 +87,14 @@ def parser_make():
         default=ARG_TPLT_FILE_PATH_D,
         metavar=ARG_TPLT_FILE_PATH_V,
         help=ARG_TPLT_FILE_PATH_H,
+    )
+
+    parser.add_argument(
+        ARG_TPLT_EXAMPLE_PATH_F,
+        dest=ARG_TPLT_EXAMPLE_PATH_K,
+        default=ARG_TPLT_EXAMPLE_PATH_D,
+        metavar=ARG_TPLT_EXAMPLE_PATH_V,
+        help=ARG_TPLT_EXAMPLE_PATH_H,
     )
 
     parser.add_argument(
@@ -149,6 +162,7 @@ def ensure_args_spec(args):
             ARG_HELP_ON_F,
             ARG_HELP_ON_F2,
             ARG_VER_ON_F,
+            ARG_TPLT_EXAMPLE_PATH_F,
             Argument(
                 ARG_RULES_FILE_PATH_F,
                 OneOf(
