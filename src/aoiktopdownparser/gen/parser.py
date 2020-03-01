@@ -7,6 +7,7 @@ from collections import OrderedDict
 from pprint import pformat
 import re
 import sys
+from traceback import format_exc
 from traceback import format_exception
 
 from aoiktopdownparser.gen.ast import AltExpr
@@ -77,7 +78,7 @@ class LexError(ParsingError):
         ).format(self.line, col_mark)
 
         text = (
-            'Lexer failed at row {row} column {col}, chararacter {pos}.\n' +\
+            'Lexer failed at row {row}, column {col}, character {pos}.\n'
             '{source_text}'
         ).format(
             row=self.row + 1,
@@ -173,7 +174,8 @@ class SyntaxError(ParsingError):
         ).format(self.line, col_mark)
 
         text = (
-            'Rule `{rule_name}` failed at row {row} column {col}, chararacter {pos}.\nContext: {ctx_msg}.\n' +\
+            'Rule `{rule_name}` failed at row {row}, column {col},' +\
+            ' character {pos}.\nContext: {ctx_msg}.\n' +\
             msg +\
             '{source_text}'
         ).format(
@@ -191,6 +193,7 @@ class SyntaxError(ParsingError):
 class Parser(object):
 
     _RULE_FUNC_PRF = ''
+
     _RULE_FUNC_POF = ''
 
     # `SK` means state dict key.
@@ -232,6 +235,8 @@ class Parser(object):
 
     # Scanning is successful.
     _DK_SSS = 'sss'
+
+    WHITESPACE_TOKEN_NAME = ''
 
     _TOKEN_NAME_TO_REGEX_OBJ = OrderedDict([
         ('end', re.compile('$')),
@@ -311,8 +316,6 @@ class Parser(object):
 
         # Backtracking state stack.
         self._state_stack = []
-
-    WHITESPACE_TOKEN_NAME = ''
 
     def _make_tokens(self):
         self._pos = 0
@@ -500,6 +503,38 @@ class Parser(object):
         except KeyError:
             return default
 
+    def _seek(self, token_index):
+        if token_index < 0 or token_index >= self._txt_len:
+            raise ValueError(token_index)
+
+        _, token_info = self._tokens[token_index]
+
+        self._pos = token_info.pos
+        self._row = token_info.row
+        self._col = token_info.col
+
+    def _retract(self, token_index=None):
+        if token_index is None:
+            token_index = self._token_index
+
+        while True:
+            if token_index == 0:
+                break
+
+            token_index -= 1
+
+            if token_index < 0:
+                raise ValueError(token_index)
+
+            token_name, _ = self._tokens[
+                token_index
+            ]
+
+            if token_name != self.WHITESPACE_TOKEN_NAME:
+                break
+
+        self._seek(token_index)
+
     def _peek(self, token_names, is_required=False, is_branch=False):
         token_index = self._token_index
 
@@ -523,32 +558,6 @@ class Parser(object):
             self._error(token_names=token_names)
         else:
             return None
-
-    def _retract(self, token_index=None):
-        if token_index is None:
-            while True:
-                if self._token_index <= 0:
-                    raise ValueError(self._token_index)
-
-                self._token_index -= 1
-
-                current_token_name, token_info = self._tokens[
-                    self._token_index
-                ]
-
-                if current_token_name == self.WHITESPACE_TOKEN_NAME:
-                    continue
-
-                break
-        else:
-            if token_index < 0 or token_index >= self._txt_len:
-                raise ValueError(token_index)
-
-            _, token_info = self._tokens[token_index]
-
-        self._pos = token_info.pos
-        self._row = token_info.row
-        self._col = token_info.col
 
     def _scan_token(self, token_name, new_ctx=False):
         while True:
@@ -1252,7 +1261,7 @@ def parsing_error_to_msg(
             col_mark = ' ' * narrow_columns_index + '|'
 
             msg = (
-                'Rule `{rule}` failed at row {row} column {col}'
+                'Rule `{rule}` failed at row {row}, column {col},'
                 ' character {pos}.\n'
                 ' Context: {ctx_msg}.\n'
                 '```\n'
@@ -1303,7 +1312,7 @@ WIDE_CHARS_REO = re.compile(
 )
 
 NON_WIDE_CHARS_REO = re.compile(
-    '[\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
+    '[^\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
 )
 
 def get_narrow_column_index(row_txt, column_index):
