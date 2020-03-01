@@ -818,6 +818,7 @@ NON_WIDE_CHARS_REO = re.compile(
     '[^\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
 )
 
+
 def get_narrow_column_index(row_txt, column_index):
     if WIDE_CHARS_REO is None:
         return column_index

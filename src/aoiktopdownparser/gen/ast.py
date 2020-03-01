@@ -67,8 +67,8 @@ class AstNode(object):
 
     def gen(self, to_token_name, to_first_set, opts, **kwargs):
         """
-        @param to_token_name: Map pattern info to token name. Pattern info is a
-         tuple of (_RE_PATTERN_, _RE_FLAGS_STR_).
+        @param to_token_name: Map pattern info to token name.
+        Pattern info is a tuple of (_RE_PATTERN_, _RE_FLAGS_STR_).
 
         @param to_first_set: Map rule name to first set.
 

@@ -6,6 +6,7 @@ import sys
 
 IS_PY2 = sys.version_info[0] == 2
 
+
 def to_ustr(text):
     if IS_PY2:
         return text.decode('utf-8')

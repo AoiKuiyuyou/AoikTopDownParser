@@ -238,32 +238,32 @@ class Parser(object):
     WHITESPACE_TOKEN_NAME = ''
 
     _TOKEN_NAME_AND_REGEX_OBJ_TUPLES = [
-        ('end', re.compile('$')),
-        ('comma', re.compile(',')),
-        ('colon', re.compile(':')),
-        ('equal_sign', re.compile('=')),
-        ('at_sign', re.compile('@')),
-        ('pipe_sign', re.compile(r'\|')),
-        ('parenthesis_start', re.compile(r'\(')),
-        ('parenthesis_end', re.compile(r'\)')),
-        ('bracket_start', re.compile(r'\[')),
-        ('bracket_end', re.compile(r'\]')),
-        ('occ01_trailer', re.compile(r'\?')),
-        ('occ0m_trailer', re.compile(r'\*')),
-        ('occ1m_trailer', re.compile(r'\+')),
-        ('none', re.compile('None(?![a-zA-Z0-9_])')),
-        ('boolean', re.compile('(True|False)(?![a-zA-Z0-9_])')),
+        ('end', re.compile('$')),  # noqa
+        ('comma', re.compile(',')),  # noqa
+        ('colon', re.compile(':')),  # noqa
+        ('equal_sign', re.compile('=')),  # noqa
+        ('at_sign', re.compile('@')),  # noqa
+        ('pipe_sign', re.compile(r'\|')),  # noqa
+        ('parenthesis_start', re.compile(r'\(')),  # noqa
+        ('parenthesis_end', re.compile(r'\)')),  # noqa
+        ('bracket_start', re.compile(r'\[')),  # noqa
+        ('bracket_end', re.compile(r'\]')),  # noqa
+        ('occ01_trailer', re.compile(r'\?')),  # noqa
+        ('occ0m_trailer', re.compile(r'\*')),  # noqa
+        ('occ1m_trailer', re.compile(r'\+')),  # noqa
+        ('none', re.compile('None(?![a-zA-Z0-9_])')),  # noqa
+        ('boolean', re.compile('(True|False)(?![a-zA-Z0-9_])')),  # noqa
         ('number', re.compile(r"""
         ([-+])?         # Sign
         (?=\d|[.]\d)    # Next is an integer part or a fraction part
         (\d*)           # Integer part
         ([.]\d*)?       # Fraction part
         (e[-+]?\d+)?    # Exponent part
-        """, re.VERBOSE | re.IGNORECASE)),
-        ('string', re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)')),
-        ('rule_name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=:)')),
-        ('name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!:)')),
-        ('code', re.compile(r'(`+)((?:.|\n)*?)\1')),
+        """, re.VERBOSE | re.IGNORECASE)),  # noqa
+        ('string', re.compile('r?(\'\'\'|"""|\'|")((?:[^\\\\]|\\\\.)*?)(\\1)')),  # noqa
+        ('rule_name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?=:)')),  # noqa
+        ('name', re.compile(r'\b([a-zA-Z_][a-zA-Z0-9_]*)\b(?!:)')),  # noqa
+        ('code', re.compile(r'(`+)((?:.|\n)*?)\1')),  # noqa
     ]
 
     def __init__(self, txt, debug=False):
@@ -1311,6 +1311,7 @@ WIDE_CHARS_REO = re.compile(
 NON_WIDE_CHARS_REO = re.compile(
     '[^\u4e00-\u9fa5，、；：。！？…—‘’“”（）【】《》]+'
 )
+
 
 def get_narrow_column_index(row_txt, column_index):
     if WIDE_CHARS_REO is None:

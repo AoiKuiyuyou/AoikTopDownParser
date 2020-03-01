@@ -194,13 +194,19 @@ def get_parser_txt(rules, tplt_text, opts):
     for rule in rules:
         rule_first_set = to_first_set[rule.name]
 
-        first_set_token_names = [to_token_name[x] for x in rule_first_set if x != EMPTY_PATTERN_INFO]
+        first_set_token_names = [
+            to_token_name[x]
+            for x in rule_first_set if x != EMPTY_PATTERN_INFO
+        ]
 
         first_set_token_names.sort()
 
         to_first_set_token_names[rule.name] = first_set_token_names
 
-        follow_set_token_names = [to_token_name[x] for x in rule.get_follow_set()]
+        follow_set_token_names = [
+            to_token_name[x] for x in rule.get_follow_set()
+        ]
+
         follow_set_token_names.sort()
 
         to_follow_set_token_names[rule.name] = follow_set_token_names
@@ -224,7 +230,9 @@ def get_parser_txt(rules, tplt_text, opts):
 
     if entry_rule_name:
         if entry_rule is None:
-            msg = to_ustr('Entry rule not found: `{0}`.').format(entry_rule_name)
+            msg = to_ustr('Entry rule not found: `{0}`.').format(
+                entry_rule_name
+            )
 
             raise ValueError(msg)
 
@@ -297,6 +305,8 @@ def get_parser_txt(rules, tplt_text, opts):
 
     format_str2 = to_ustr('(\'{0}\', re.compile({1}, {2})),')
 
+    noqa_ustr = to_ustr('  # noqa')
+
     for rule in rules:
         token_name = rule.name
 
@@ -317,7 +327,7 @@ def get_parser_txt(rules, tplt_text, opts):
                 pattern_info[1],
             )
 
-        reo_txts.append(reo_txt)
+        reo_txts.append(reo_txt + noqa_ustr)
 
     for token_name in unnamed_pattern_token_names:
         pattern_info = token_name_to_pattern_info[token_name]
@@ -327,12 +337,10 @@ def get_parser_txt(rules, tplt_text, opts):
             pattern_info[0],
         )
 
-        reo_txts.append(reo_txt)
+        reo_txts.append(reo_txt + noqa_ustr)
 
     reos_txt = to_ustr('_TOKEN_NAME_AND_REGEX_OBJ_TUPLES = [\n{0}\n]\n')\
-        .format(
-            add_indent(to_ustr('\n').join(reo_txts))
-        )
+        .format(add_indent(to_ustr('\n').join(reo_txts)))
 
     reos_txt = add_indent(reos_txt)
 
