@@ -73,6 +73,8 @@ def get_parser_txt(rules, tplt_text, opts):
 
     is_zfill_len_found = False
 
+    unnamed_pattern_token_names = []
+
     while True:
         pattern_number = 0
 
@@ -89,6 +91,8 @@ def get_parser_txt(rules, tplt_text, opts):
 
             if is_zfill_len_found:
                 to_token_name[pattern_info] = token_name
+
+                unnamed_pattern_token_names.append(token_name)
 
         if is_zfill_len_found:
             break
@@ -301,6 +305,16 @@ def get_parser_txt(rules, tplt_text, opts):
                 pattern_info[0],
                 pattern_info[1],
             )
+
+        reo_txts.append(reo_txt)
+
+    for token_name in unnamed_pattern_token_names:
+        pattern_info = token_name_to_pattern_info[token_name]
+
+        reo_txt = u'(\'{0}\', re.compile({1})),'.format(
+            token_name,
+            pattern_info[0],
+        )
 
         reo_txts.append(reo_txt)
 
