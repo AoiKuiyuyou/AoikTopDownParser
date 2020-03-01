@@ -8,7 +8,7 @@ from setuptools import setup
 setup(
     name='AoikTopDownParser',
 
-    version='0.3.0',
+    version='0.4.0',
 
     description=(
         'A top-down recursive descent predictive or backtracking parser'
