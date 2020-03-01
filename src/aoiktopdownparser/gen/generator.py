@@ -10,6 +10,7 @@ from ..util.str_util import NEWLINE_USTR
 from ..util.str_util import to_ustr
 from .ast import EMPTY_PATTERN_INFO
 from .ast import Code
+from .ast import GrammarError
 from .ast import Pattern
 from .ast import SeqExpr
 from .opts_const import GS_BACKTRACKING_ON
@@ -40,13 +41,12 @@ def get_parser_txt(rules, tplt_text, opts):
     # Map pattern info to terminal token name
     to_token_name = {}
 
+    to_rule_name = {}
+
     for rule in rules:
         # Get pattern infos of the rule.
         # Container rules may have more than one pattern info.
         rule_pattern_infos = rule.get_pattern_infos()
-
-        # Add to the total set.
-        pattern_infos.update(rule_pattern_infos)
 
         # Get the only pattern of the rule.
         signle_pattern_item = get_single_pattern(rule.item)
@@ -55,18 +55,39 @@ def get_parser_txt(rules, tplt_text, opts):
         if signle_pattern_item is not None:
             pattern_info = next(iter(rule_pattern_infos))
 
+            early_rule_name = to_rule_name.get(pattern_info, None)
+
+            if early_rule_name is not None:
+                msg = 'duplicate token pattern {0} in rule `{1}` and `{2}`.'\
+                    .format(
+                        pattern_info[0],
+                        early_rule_name,
+                        rule.name,
+                    )
+
+                raise GrammarError(msg)
+
             # Store the mapping from pattern info to terminal token name.
             to_token_name[pattern_info] = rule.name
 
             # Store the terminal token name.
             token_names.add(rule.name)
 
+        # Add to the total set.
+        pattern_infos.update(rule_pattern_infos)
+
+        for rule_pattern_info in rule_pattern_infos:
+            # For unnamed tokens, only remember the first rule name where they
+            # appear.
+            if rule_pattern_info not in to_rule_name:
+                to_rule_name[rule_pattern_info] = rule.name
+
+    del to_rule_name
+
     # A list of pattern infos that are not the only one for a rule.
     unnamed_pattern_infos = []
 
-    for pattern_info in sorted(
-        pattern_infos, key=lambda x: (len(x[0]), x[0])
-    ):
+    for pattern_info in pattern_infos:
         token_name = to_token_name.get(pattern_info, None)
 
         if token_name is None:
