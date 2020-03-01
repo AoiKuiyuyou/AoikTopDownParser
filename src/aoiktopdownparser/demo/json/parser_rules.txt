@@ -1,35 +1,41 @@
 doc:
     expr
     end
+    `ctx.res = expr.res`
 
-expr:
-    lit_val
-    `ctx.res = lit_val.res`
-    |
-    list_def
-    `ctx.res = list_def.res`
-    |
-    dict_def
-    `ctx.res = dict_def.res`
 
-lit_val:
-    lit_str
-    `ctx.res = lit_str.res`
-    |
-    lit_num
-    `ctx.res = lit_num.res`
-    |
-    lit_bool
-    `ctx.res = lit_bool.res`
-    |
-    lit_null
-    `ctx.res = lit_null.res`
+end: '$'
 
-lit_str:
-    r'(")((?:[^\\]|\\.)*?)(\1)'
-    `ctx.res = eval(lit_str.rem.group())`
 
-lit_num:
+comma: ','
+
+
+colon: ':'
+
+
+bracket_start: r'\['
+
+
+bracket_end: r'\]'
+
+
+brace_start: r'\{'
+
+
+brace_end: r'\}'
+
+
+null:
+    'null(?![a-zA-Z0-9_])'
+    `ctx.res = None`
+
+
+boolean:
+    '(true|false)(?![a-zA-Z0-9_])'
+    `ctx.res = True if (boolean.res.match_obj.group() == 'true') else False`
+
+
+number:
     r"""
 ([-+])?         # Sign
 (?=\d|[.]\d)    # Next is an integer part or a fraction part
@@ -37,79 +43,76 @@ lit_num:
 ([.]\d*)?       # Fraction part
 (e[-+]?\d+)?    # Exponent part
 """ @(flags='re.VERBOSE | re.IGNORECASE')
-    `ctx.res = eval(lit_num.rem.group())`
+    `ctx.res = eval(number.res.match_obj.group())`
 
-lit_bool:
-    '(true|false)(?![a-zA-Z0-9_])'
-    `ctx.res = True if (lit_bool.rem.group() == 'true') else False`
 
-lit_null:
-    'null(?![a-zA-Z0-9_])'
-    `ctx.res = None`
+string:
+    r'(")((?:[^\\]|\\.)*?)(\1)'
+    `ctx.res = eval(string.res.match_obj.group())`
 
-list_beg:
-    r'\['
 
-list_end:
-    r'\]'
+literal:
+    null
+    `ctx.res = null.res`
+    |
+    boolean
+    `ctx.res = boolean.res`
+    |
+    number
+    `ctx.res = number.res`
+    |
+    string
+    `ctx.res = string.res`
 
-list_isep:
-    ','
+
+expr:
+    literal
+    `ctx.res = literal.res`
+    |
+    list_def
+    `ctx.res = list_def.res`
+    |
+    dict_def
+    `ctx.res = dict_def.res`
+
 
 list_def:
     `ctx.res = []`
-    list_beg
+    bracket_start
     (
-        list_end
+        bracket_end
         |
         expr
         `ctx.res.append(expr.res)`
         (
-            list_isep
+            comma
             expr
             `ctx.res.append(expr.res)`
         )*
-        list_end
+        bracket_end
     )
 
-dict_beg:
-    r'\{'
-
-dict_end:
-    r'\}'
-
-dict_isep:
-    ','
 
 dict_def:
     `dict_items = []`
-    dict_beg
+    brace_start
     (
-        dict_end
+        brace_end
         |
         dict_item
         `dict_items.append(dict_item.res)`
         (
-            dict_isep
+            comma
             dict_item
             `dict_items.append(dict_item.res)`
         )*
-        dict_end
+        brace_end
     )
     `ctx.res = dict(dict_items)`
 
+
 dict_item:
-    dict_key
-    dict_kvsep
+    string
+    colon
     expr
-    `ctx.res = (dict_key.res, expr.res)`
-
-dict_key:
-    lit_str
-    `ctx.res = lit_str.res`
-
-dict_kvsep:
-    ':'
-
-end:
-    '$'
+    `ctx.res = (string.res, expr.res)`

@@ -1,24 +1,53 @@
 goal:
-    expr end                `ctx.res = expr.res`
+    expr
+    end
+    `ctx.res = expr.res`
 
-expr:
-    factor                  `v = factor.res`
-    ( '[+]' factor          `v = v + factor.res`
-    |  '-'  factor          `v = v - factor.res`
-    )*                      `ctx.res = v`
-
-factor:
-    term                    `v = term.res`
-    ( '[*]' term            `v = v * term.res`
-    |  '/'  term            `v = v / term.res`
-    )*                      `ctx.res = v`
-
-term:
-    num                     `ctx.res = num.res`
-    | '[(]' expr '[)]'      `ctx.res = expr.res`
-
-num:
-    '[0-9]+'                `ctx.res = eval(num.rem.group())`
 
 end:
     '$'
+
+
+expr:
+    factor
+    `value = factor.res`
+    (
+        '[+]'
+        factor
+        `value += factor.res`
+        |
+        '-'
+        factor
+        `value -= factor.res`
+    )*
+    `ctx.res = value`
+
+
+factor:
+    term
+    `value = term.res`
+    (
+        '[*]'
+        term
+        `value *= term.res`
+        |
+        '/'
+        term
+        `value /= term.res`
+    )*
+    `ctx.res = value`
+
+
+term:
+    num
+    `ctx.res = num.res`
+    |
+    '[(]'
+    expr
+    '[)]'
+    `ctx.res = expr.res`
+
+
+num:
+    '[0-9]+'
+    `ctx.res = int(num.res.match_obj.group())`
