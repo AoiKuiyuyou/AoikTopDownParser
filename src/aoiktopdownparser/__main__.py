@@ -62,6 +62,17 @@ def setup_syspath(package_root, current_dir=None):
 
 def main(args=None):
     try:
+        import argparse
+
+        id(argparse)
+    except ImportError:
+        msg = 'Error: Please install `argparse` package.\n'
+
+        sys.stderr.write(msg)
+
+        return 1
+
+    try:
         setup_syspath(
             package_root=os.path.dirname(
                 os.path.dirname(os.path.abspath(__file__))
